@@ -1,0 +1,144 @@
+# Cursor AI Rules for Elementary Music Helper
+
+## Project Context
+This is a Streamlit web application for elementary school music education.
+It converts audio/sheet music to simplified C major scores with solfege notation and basic accompaniment.
+
+## Code Style Guidelines
+
+### Python
+- Use Python 3.8+ features
+- Follow PEP 8 style guide
+- Use type hints for function parameters and returns
+- Maximum line length: 100 characters
+- Use descriptive variable names in English (comments can be in Korean)
+
+### Streamlit Conventions
+- Use `st.cache_data` for data loading functions
+- Use `st.cache_resource` for ML model loading
+- Organize UI with columns: `st.columns([1, 1])`
+- Use session state for maintaining state: `st.session_state`
+- Always add descriptive help text with `help` parameter
+
+### Music21 Best Practices
+- Always check if stream has notes before processing
+- Use `stream.flat.notes` for simple melody extraction
+- Handle key signature changes gracefully
+- Quantize rhythms before transposition
+
+### Error Handling
+- Wrap file operations in try-except blocks
+- Provide user-friendly error messages in Korean
+- Log technical errors for debugging
+- Always validate uploaded files
+
+### AI Assistant Integration
+- Check API key availability before calling OpenAI
+- Always provide fallback responses when API is unavailable
+- Keep AI responses concise and age-appropriate for elementary students
+- Cache AI responses when possible to reduce API calls
+- Handle API errors gracefully with informative messages
+
+## File Organization
+- `src/app.py`: Main Streamlit UI and navigation
+- `src/audio_processor.py`: Audio → MIDI conversion using basic-pitch
+- `src/score_processor.py`: Score parsing, simplification, and transposition
+- `src/chord_generator.py`: Automatic chord accompaniment generation
+- `src/player.py`: Music playback functionality
+- `utils/`: Helper functions and utilities
+
+## Key Features to Remember
+
+### 1. Audio Processing
+- Accept mp3, wav formats
+- Use basic-pitch for melody extraction
+- Convert to monophonic MIDI first
+- Target range: C4-C5
+
+### 2. Score Simplification
+- Rhythm quantization: 0.5, 1, 2, 4 beats
+- Transpose to C major
+- Add solfege (도레미) as lyrics
+- Keep melody in C4-C5 range
+
+### 3. Chord Generation
+- Analyze melody per measure
+- Choose from I, IV, V, vi chords
+- Use block chords (half notes) for left hand
+- Simple harmonic progression
+
+### 4. UI Layout
+- Left panel: Audio → Score conversion
+- Right panel: Score → Simplified + Accompaniment
+- Clear section headers in Korean
+- Progress indicators for long operations
+
+## Common Patterns
+
+### Loading Audio
+```python
+import soundfile as sf
+audio_data, sample_rate = sf.read(uploaded_file)
+```
+
+### Music21 Transposition
+```python
+from music21 import stream, interval
+score = stream.Score()
+target_key = key.Key('C')
+transposed = score.transpose(interval.Interval(score.analyze('key').tonic, target_key.tonic))
+```
+
+### Adding Solfege
+```python
+solfege_map = {'C': '도', 'D': '레', 'E': '미', 'F': '파', 'G': '솔', 'A': '라', 'B': '시'}
+for n in part.flat.notes:
+    n.lyric = solfege_map[n.pitch.name]
+```
+
+### Streamlit File Upload
+```python
+uploaded_file = st.file_uploader(
+    "파일 업로드",
+    type=['mp3', 'wav', 'mid', 'midi', 'xml', 'mxl'],
+    help="지원 형식: MP3, WAV, MIDI, MusicXML"
+)
+```
+
+## Testing Checklist
+- [ ] Test with various audio formats (mp3, wav)
+- [ ] Test with different key signatures
+- [ ] Test with complex rhythms
+- [ ] Verify solfege accuracy
+- [ ] Check chord progression quality
+- [ ] Test playback functionality
+- [ ] Mobile responsiveness
+
+## Performance Considerations
+- Cache expensive operations (model loading, file parsing)
+- Show progress bars for long operations
+- Limit audio file size (< 10MB recommended)
+- Optimize music21 operations with flat.notes
+
+## Korean UI Text Standards
+- Use formal polite form (합쇼체)
+- Clear action buttons: "생성하기", "처리하기", "재생하기"
+- Helpful tooltips explaining features
+- Error messages should guide next steps
+
+## Security Notes
+- Validate file types before processing
+- Set file size limits
+- Sanitize file names
+- Don't expose system paths to users
+
+## Comments
+- Code comments in English
+- User-facing strings in Korean
+- Docstrings in English with Korean examples if needed
+
+## When in Doubt
+- Prioritize user experience and simplicity
+- Elementary students should find it intuitive
+- Teachers should save time, not spend more
+- Test with actual music education scenarios

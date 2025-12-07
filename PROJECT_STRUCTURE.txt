@@ -1,0 +1,17 @@
+./LICENSE
+./PROJECT_STRUCTURE.txt
+./QUICKSTART.md
+./README.md
+./docs/deployment.md
+./docs/installation.md
+./docs/user_guide.md
+./requirements.txt
+./src/__init__.py
+./src/app.py
+./src/audio_processor.py
+./src/chord_generator.py
+./src/player.py
+./src/score_processor.py
+./utils/__init__.py
+./utils/file_utils.py
+./utils/music_utils.py
