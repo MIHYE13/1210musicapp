@@ -4,7 +4,13 @@ Analyzes chords from MIDI and displays them on piano keyboard
 """
 
 from music21 import *
-import streamlit as st
+try:
+    import streamlit as st
+    HAS_STREAMLIT = True
+except ImportError:
+    HAS_STREAMLIT = False
+    st = None
+
 from typing import List, Dict, Tuple
 import base64
 from io import BytesIO

@@ -36,13 +36,62 @@ except ImportError:
 except Exception as e:
     print(f"⚠️  .env 파일 로드 중 오류: {str(e)}")
 
-from audio_processor import AudioProcessor
-from score_processor import ScoreProcessor
-from chord_generator import ChordGenerator
-from ai_assistant import AIAssistant
-from perplexity_assistant import PerplexityAssistant
-from youtube_helper import YouTubeHelper
-from chord_analyzer import ChordAnalyzer
+# Optional imports with error handling
+try:
+    from audio_processor import AudioProcessor
+    HAS_AUDIO_PROCESSOR = True
+except ImportError as e:
+    print(f"⚠️  audio_processor를 불러올 수 없습니다: {e}")
+    HAS_AUDIO_PROCESSOR = False
+    AudioProcessor = None
+
+try:
+    from score_processor import ScoreProcessor
+    HAS_SCORE_PROCESSOR = True
+except ImportError as e:
+    print(f"⚠️  score_processor를 불러올 수 없습니다: {e}")
+    HAS_SCORE_PROCESSOR = False
+    ScoreProcessor = None
+
+try:
+    from chord_generator import ChordGenerator
+    HAS_CHORD_GENERATOR = True
+except ImportError as e:
+    print(f"⚠️  chord_generator를 불러올 수 없습니다: {e}")
+    HAS_CHORD_GENERATOR = False
+    ChordGenerator = None
+
+try:
+    from ai_assistant import AIAssistant
+    HAS_AI_ASSISTANT = True
+except ImportError as e:
+    print(f"⚠️  ai_assistant를 불러올 수 없습니다: {e}")
+    HAS_AI_ASSISTANT = False
+    AIAssistant = None
+
+try:
+    from perplexity_assistant import PerplexityAssistant
+    HAS_PERPLEXITY_ASSISTANT = True
+except ImportError as e:
+    print(f"⚠️  perplexity_assistant를 불러올 수 없습니다: {e}")
+    HAS_PERPLEXITY_ASSISTANT = False
+    PerplexityAssistant = None
+
+try:
+    from youtube_helper import YouTubeHelper
+    HAS_YOUTUBE_HELPER = True
+except ImportError as e:
+    print(f"⚠️  youtube_helper를 불러올 수 없습니다: {e}")
+    HAS_YOUTUBE_HELPER = False
+    YouTubeHelper = None
+
+try:
+    from chord_analyzer import ChordAnalyzer
+    HAS_CHORD_ANALYZER = True
+except ImportError as e:
+    print(f"⚠️  chord_analyzer를 불러올 수 없습니다: {e}")
+    HAS_CHORD_ANALYZER = False
+    ChordAnalyzer = None
 
 # PDF Parser (optional)
 try:
@@ -63,23 +112,22 @@ app.add_middleware(
         "http://localhost:5173",
         "http://127.0.0.1:3000",
         "http://127.0.0.1:5173",
-        "http://localhost:3001",  # 추가 포트 지원
-        # Netlify 배포 URL도 추가 가능
+        "http://localhost:3001",
     ],
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
     allow_headers=["*"],
     expose_headers=["*"],
 )
 
-# Initialize processors (singleton pattern)
-audio_processor = AudioProcessor()
-score_processor = ScoreProcessor()
-chord_generator = ChordGenerator()
-ai_assistant = AIAssistant()
-perplexity_assistant = PerplexityAssistant()
-youtube_helper = YouTubeHelper()
-chord_analyzer = ChordAnalyzer()
+# Initialize processors (singleton pattern) with error handling
+audio_processor = AudioProcessor() if HAS_AUDIO_PROCESSOR else None
+score_processor = ScoreProcessor() if HAS_SCORE_PROCESSOR else None
+chord_generator = ChordGenerator() if HAS_CHORD_GENERATOR else None
+ai_assistant = AIAssistant() if HAS_AI_ASSISTANT else None
+perplexity_assistant = PerplexityAssistant() if HAS_PERPLEXITY_ASSISTANT else None
+youtube_helper = YouTubeHelper() if HAS_YOUTUBE_HELPER else None
+chord_analyzer = ChordAnalyzer() if HAS_CHORD_ANALYZER else None
 
 # Temporary storage for processed scores
 score_storage = {}
@@ -108,25 +156,48 @@ async def health_check():
 @app.get("/api/keys/status")
 async def get_api_keys_status():
     """API 키 상태 확인"""
-    return {
-        "statuses": [
-            {
-                "name": "OpenAI",
-                "status": "valid" if ai_assistant.api_key else "not_set",
-                "message": "정상" if ai_assistant.api_key else "API 키가 설정되지 않았습니다"
-            },
-            {
-                "name": "Perplexity",
-                "status": "valid" if perplexity_assistant.api_key else "not_set",
-                "message": "정상" if perplexity_assistant.api_key else "API 키가 설정되지 않았습니다"
-            },
-            {
-                "name": "YouTube",
-                "status": "valid" if youtube_helper.api_key else "not_set",
-                "message": "정상" if youtube_helper.api_key else "API 키가 설정되지 않았습니다"
-            }
-        ]
-    }
+    statuses = []
+    
+    if HAS_AI_ASSISTANT and ai_assistant:
+        statuses.append({
+            "name": "OpenAI",
+            "status": "valid" if ai_assistant.api_key else "not_set",
+            "message": "정상" if ai_assistant.api_key else "API 키가 설정되지 않았습니다"
+        })
+    else:
+        statuses.append({
+            "name": "OpenAI",
+            "status": "not_available",
+            "message": "AI Assistant 모듈을 불러올 수 없습니다"
+        })
+    
+    if HAS_PERPLEXITY_ASSISTANT and perplexity_assistant:
+        statuses.append({
+            "name": "Perplexity",
+            "status": "valid" if perplexity_assistant.api_key else "not_set",
+            "message": "정상" if perplexity_assistant.api_key else "API 키가 설정되지 않았습니다"
+        })
+    else:
+        statuses.append({
+            "name": "Perplexity",
+            "status": "not_available",
+            "message": "Perplexity Assistant 모듈을 불러올 수 없습니다"
+        })
+    
+    if HAS_YOUTUBE_HELPER and youtube_helper:
+        statuses.append({
+            "name": "YouTube",
+            "status": "valid" if youtube_helper.api_key else "not_set",
+            "message": "정상" if youtube_helper.api_key else "API 키가 설정되지 않았습니다"
+        })
+    else:
+        statuses.append({
+            "name": "YouTube",
+            "status": "not_available",
+            "message": "YouTube Helper 모듈을 불러올 수 없습니다"
+        })
+    
+    return {"statuses": statuses}
 
 # ==================== Audio Processing ====================
 
@@ -598,6 +669,18 @@ async def ai_chat(request: dict):
     
     try:
         # 최신 OpenAI API 사용
+        if not HAS_AI_ASSISTANT or not ai_assistant:
+            return {
+                "success": False,
+                "error": "AI Assistant 모듈을 사용할 수 없습니다."
+            }
+        
+        if not HAS_AI_ASSISTANT or not ai_assistant:
+            return {
+                "success": False,
+                "error": "AI Assistant 모듈을 사용할 수 없습니다."
+            }
+        
         if not ai_assistant.api_key:
             return {
                 "success": False,
@@ -651,6 +734,12 @@ async def explain_theory(request: dict):
         raise HTTPException(status_code=400, detail="주제를 입력해주세요.")
     
     try:
+        if not HAS_AI_ASSISTANT or not ai_assistant:
+            return {
+                "success": False,
+                "error": "AI Assistant 모듈을 사용할 수 없습니다."
+            }
+        
         if not ai_assistant.api_key:
             return {
                 "success": False,
@@ -701,6 +790,12 @@ async def generate_lesson_plan(request: dict):
         raise HTTPException(status_code=400, detail="곡 제목을 입력해주세요.")
     
     try:
+        if not HAS_AI_ASSISTANT or not ai_assistant:
+            return {
+                "success": False,
+                "error": "AI Assistant 모듈을 사용할 수 없습니다."
+            }
+        
         if not ai_assistant.api_key:
             return {
                 "success": False,

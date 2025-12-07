@@ -3,7 +3,13 @@ Chord Generation Module
 Automatically generates simple accompaniment for melodies
 """
 
-import streamlit as st
+try:
+    import streamlit as st
+    HAS_STREAMLIT = True
+except ImportError:
+    HAS_STREAMLIT = False
+    st = None
+
 from music21 import stream, note, chord, key, pitch
 from typing import List, Optional
 

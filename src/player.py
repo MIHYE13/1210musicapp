@@ -3,7 +3,12 @@ Music Player Module
 Handles playback of musical scores
 """
 
-import streamlit as st
+try:
+    import streamlit as st
+    HAS_STREAMLIT = True
+except ImportError:
+    HAS_STREAMLIT = False
+    st = None
 from music21 import stream, midi
 import tempfile
 import os
