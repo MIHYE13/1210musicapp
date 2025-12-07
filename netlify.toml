@@ -1,0 +1,33 @@
+[build]
+  # 배포할 브랜치 (Netlify 대시보드에서도 설정 가능)
+  branch = "main"
+  
+  # 빌드 명령어
+  command = "npm run build"
+  
+  # 배포할 디렉토리 (Vite 빌드 결과물)
+  publish = "dist"
+
+[build.environment]
+  # Node.js 버전
+  NODE_VERSION = "18"
+
+# SPA 라우팅을 위한 리다이렉트 설정
+# React Router를 사용하는 경우 모든 경로를 index.html로 리다이렉트
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+
+# 헤더 설정 (선택사항)
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Frame-Options = "DENY"
+    X-XSS-Protection = "1; mode=block"
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+
+# 환경 변수는 Netlify 대시보드에서 설정
+# Site settings > Environment variables
+

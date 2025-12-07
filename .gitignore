@@ -93,3 +93,6 @@ dist/
 dist-ssr/
 *.local
 .vite/
+
+# Netlify
+.netlify/
