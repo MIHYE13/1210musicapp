@@ -43,22 +43,17 @@ const ScoreProcessing = () => {
     setProcessed(false)
 
     try {
-      // 백엔드 API 호출 시도
+      // 백엔드 API 호출
       const response = await scoreApi.processScore(scoreFile, options)
       
       if (response.success && response.data) {
         setProcessedScore(response.data)
         setProcessed(true)
       } else {
-        // 백엔드가 없을 경우 시뮬레이션
-        await new Promise((resolve) => setTimeout(resolve, 2000))
-        
-        setProcessedScore({
-          scoreId: `processed_${Date.now()}`,
-          message: '악보 처리가 완료되었습니다. (시뮬레이션 모드)',
-          options: options,
-        })
-        setProcessed(true)
+        // API 오류 처리
+        const errorMsg = response.error || '악보 처리에 실패했습니다.'
+        setError(errorMsg)
+        setProcessed(false)
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : '알 수 없는 오류가 발생했습니다.')
@@ -83,45 +78,66 @@ const ScoreProcessing = () => {
     setIsPlaying(false)
   }
 
-  const handleDownload = async (format: 'midi' | 'musicxml') => {
+  const handleDownload = async (format: 'mp3' | 'midi' | 'musicxml') => {
     if (!processedScore?.scoreId) {
       alert('처리된 악보가 없습니다.')
       return
     }
 
     try {
-        if (format === 'midi') {
-          const response = await scoreApi.exportMidi(processedScore.scoreId)
-          if (response.success && response.data) {
-            // 다운로드 로직
-            const data = response.data as any
-            const blob = new Blob([data], { type: 'audio/midi' })
-          const url = URL.createObjectURL(blob)
-          const a = document.createElement('a')
-          a.href = url
-          a.download = 'processed_score.mid'
-          a.click()
-          URL.revokeObjectURL(url)
+      let response
+      let filename = 'processed_score'
+      let mimeType = 'application/octet-stream'
+      
+      if (format === 'mp3') {
+        response = await scoreApi.exportMp3(processedScore.scoreId)
+        filename = 'processed_score.mp3'
+        mimeType = 'audio/mpeg'
+      } else if (format === 'midi') {
+        response = await scoreApi.exportMidi(processedScore.scoreId)
+        filename = 'processed_score.mid'
+        mimeType = 'audio/midi'
+      } else {
+        response = await scoreApi.exportMusicXML(processedScore.scoreId)
+        filename = 'processed_score.xml'
+        mimeType = 'application/xml'
+      }
+      
+      if (response.success && response.data) {
+        const data = response.data as any
+        
+        // Blob 처리
+        let blob: Blob
+        if (data instanceof Blob) {
+          blob = data
+          // Blob의 실제 타입 확인
+          if (data.type) {
+            mimeType = data.type
+          }
+        } else if (typeof data === 'string') {
+          // Base64 문자열인 경우
+          const binaryString = atob(data)
+          const bytes = new Uint8Array(binaryString.length)
+          for (let i = 0; i < binaryString.length; i++) {
+            bytes[i] = binaryString.charCodeAt(i)
+          }
+          blob = new Blob([bytes], { type: mimeType })
         } else {
-          alert('MIDI 다운로드에 실패했습니다. (시뮬레이션 모드에서는 실제 다운로드가 불가능합니다)')
+          // ArrayBuffer나 다른 형식
+          blob = new Blob([data], { type: mimeType })
         }
-        } else {
-          const response = await scoreApi.exportMusicXML(processedScore.scoreId)
-          if (response.success && response.data) {
-            const data = response.data as any
-            const blob = new Blob([data], { type: 'application/xml' })
-          const url = URL.createObjectURL(blob)
-          const a = document.createElement('a')
-          a.href = url
-          a.download = 'processed_score.xml'
-          a.click()
-          URL.revokeObjectURL(url)
-        } else {
-          alert('MusicXML 다운로드에 실패했습니다. (시뮬레이션 모드에서는 실제 다운로드가 불가능합니다)')
-        }
+        
+        const url = URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url
+        a.download = filename
+        a.click()
+        URL.revokeObjectURL(url)
+      } else {
+        alert(`파일 다운로드에 실패했습니다: ${response.error || '알 수 없는 오류'}`)
       }
     } catch (err) {
-      alert('다운로드 중 오류가 발생했습니다.')
+      alert('다운로드 중 오류가 발생했습니다: ' + (err instanceof Error ? err.message : '알 수 없는 오류'))
     }
   }
 
@@ -294,9 +310,15 @@ const ScoreProcessing = () => {
               <div className="download-buttons">
                 <button
                   className="download-button"
+                  onClick={() => handleDownload('mp3')}
+                >
+                  🎵 MP3 다운로드
+                </button>
+                <button
+                  className="download-button"
                   onClick={() => handleDownload('midi')}
                 >
-                  🎹 MIDI 다운로드
+                  🎼 MIDI 다운로드
                 </button>
                 <button
                   className="download-button"
@@ -322,10 +344,6 @@ const ScoreProcessing = () => {
           <li>"처리하기" 버튼을 클릭하세요</li>
           <li>완성된 악보를 재생하고 다운로드하세요!</li>
         </ol>
-        <div className="warning-box">
-          <p>⚠️ <strong>참고:</strong> 실제 악보 처리를 위해서는 백엔드 API가 필요합니다.</p>
-          <p>현재는 시뮬레이션 모드로 작동합니다.</p>
-        </div>
       </div>
     </div>
   )

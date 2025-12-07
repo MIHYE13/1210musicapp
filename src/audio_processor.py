@@ -3,7 +3,13 @@ Audio Processing Module
 Converts audio files to musical scores using basic-pitch
 """
 
-import streamlit as st
+try:
+    import streamlit as st
+    HAS_STREAMLIT = True
+except ImportError:
+    HAS_STREAMLIT = False
+    st = None
+
 import soundfile as sf
 import numpy as np
 from io import BytesIO
@@ -20,14 +26,16 @@ class AudioProcessor:
         self.sample_rate = 22050
         self.model = None
     
-    @st.cache_resource
-    def _load_basic_pitch_model(_self):
-        """Load basic-pitch model (cached)"""
+    def _load_basic_pitch_model(self):
+        """Load basic-pitch model"""
         try:
             from basic_pitch.inference import predict
             return predict
         except ImportError:
-            st.error("basic-pitch 라이브러리를 설치해주세요: pip install basic-pitch")
+            if HAS_STREAMLIT and st:
+                st.error("basic-pitch 라이브러리를 설치해주세요: pip install basic-pitch")
+            else:
+                print("basic-pitch 라이브러리를 설치해주세요: pip install basic-pitch")
             return None
     
     def process_audio(self, audio_file) -> Optional[stream.Score]:
@@ -63,7 +71,43 @@ class AudioProcessor:
             return score
             
         except Exception as e:
-            st.error(f"오디오 처리 오류: {str(e)}")
+            try:
+                import st
+                st.error(f"오디오 처리 오류: {str(e)}")
+            except:
+                print(f"오디오 처리 오류: {str(e)}")
+            return None
+    
+    def process_audio_from_path(self, audio_path: str) -> Optional[stream.Score]:
+        """
+        Process audio file from file path and convert to music21 score
+        
+        Args:
+            audio_path: Path to audio file
+            
+        Returns:
+            music21.stream.Score object or None if failed
+        """
+        try:
+            # Load basic-pitch model
+            predict = self._load_basic_pitch_model()
+            if predict is None:
+                return None
+            
+            # Predict MIDI from audio
+            model_output, midi_data, note_events = predict(audio_path)
+            
+            # Convert MIDI to music21 score
+            score = self._midi_to_score(midi_data, note_events)
+            
+            return score
+            
+        except Exception as e:
+            try:
+                import st
+                st.error(f"오디오 처리 오류: {str(e)}")
+            except:
+                print(f"오디오 처리 오류: {str(e)}")
             return None
     
     def _midi_to_score(self, midi_data, note_events) -> stream.Score:

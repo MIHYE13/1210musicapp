@@ -3,14 +3,33 @@ AI Assistant Module
 Uses ChatGPT API to provide intelligent music education assistance
 """
 
-import streamlit as st
+try:
+    import streamlit as st
+    HAS_STREAMLIT = True
+except ImportError:
+    HAS_STREAMLIT = False
+    st = None
+
 from typing import Optional, List, Dict
 import json
 import os
-from dotenv import load_dotenv
+from pathlib import Path
 
-# Load environment variables from .env file
-load_dotenv()
+# Load environment variables from .env file in project root
+try:
+    from dotenv import load_dotenv
+    # Find project root (parent of src directory)
+    project_root = Path(__file__).parent.parent
+    env_path = project_root / '.env'
+    if env_path.exists():
+        load_dotenv(env_path)
+    else:
+        # Fallback: try current directory
+        load_dotenv()
+except ImportError:
+    pass  # python-dotenv not installed, use system env vars only
+except Exception:
+    pass  # Failed to load .env, use system env vars only
 
 class AIAssistant:
     """ChatGPT-powered music education assistant"""
@@ -28,12 +47,13 @@ class AIAssistant:
     def _get_api_key(self) -> Optional[str]:
         """Get API key from multiple sources (priority order)"""
         # 1. Try Streamlit secrets (for cloud deployment)
-        try:
-            key = st.secrets.get("OPENAI_API_KEY")
-            if key:
-                return key
-        except:
-            pass
+        if HAS_STREAMLIT and st:
+            try:
+                key = st.secrets.get("OPENAI_API_KEY")
+                if key:
+                    return key
+            except:
+                pass
         
         # 2. Try environment variable (from .env file or system)
         key = os.getenv("OPENAI_API_KEY")

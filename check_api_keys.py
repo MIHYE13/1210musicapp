@@ -10,12 +10,20 @@ from pathlib import Path
 # .env 파일 로드 시도
 try:
     from dotenv import load_dotenv
-    env_path = Path('.') / '.env'
+    # 프로젝트 루트 경로 찾기
+    project_root = Path(__file__).parent
+    env_path = project_root / '.env'
     if env_path.exists():
         load_dotenv(env_path)
-        print("✅ .env 파일을 찾았습니다.\n")
+        print(f"✅ .env 파일을 찾았습니다: {env_path}\n")
     else:
-        print("⚠️  .env 파일을 찾을 수 없습니다.\n")
+        print(f"⚠️  .env 파일을 찾을 수 없습니다: {env_path}\n")
+        print("   프로젝트 루트에 .env 파일을 생성하고 다음 키를 설정하세요:\n")
+        print("   - OPENAI_API_KEY")
+        print("   - PERPLEXITY_API_KEY")
+        print("   - YOUTUBE_API_KEY\n")
+        # Fallback: 현재 디렉토리에서도 시도
+        load_dotenv()
 except ImportError:
     print("⚠️  python-dotenv가 설치되지 않았습니다. 환경 변수만 확인합니다.\n")
 

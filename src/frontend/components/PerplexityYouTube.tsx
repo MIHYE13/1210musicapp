@@ -29,15 +29,18 @@ const PerplexityYouTube = () => {
       
       if (apiResponse.success && apiResponse.data) {
         const data = apiResponse.data as any
-        setResults(data.result || data)
+        if (data.result) {
+          setResults(data.result)
+        } else if (data.error) {
+          setError(data.error)
+          setResults('')
+        } else {
+          setResults(JSON.stringify(data))
+        }
       } else {
-        // 시뮬레이션 모드
-        await new Promise((resolve) => setTimeout(resolve, 2000))
-        setResults(
-          `"${query}"에 대한 ${searchType} 결과 (시뮬레이션 모드)\n\n` +
-          `검색 결과가 여기에 표시됩니다. 실제 기능을 사용하려면 Perplexity API 키를 설정해주세요.\n\n` +
-          `현재는 시뮬레이션 모드로 작동합니다.`
-        )
+        const errorMsg = apiResponse.error || 'API 호출에 실패했습니다.'
+        setError(errorMsg)
+        setResults('')
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : '알 수 없는 오류가 발생했습니다.')
@@ -62,23 +65,22 @@ const PerplexityYouTube = () => {
       if (apiResponse.success && apiResponse.data) {
         const data = apiResponse.data as any
         const videos = data.videos || data
-        if (Array.isArray(videos)) {
+        if (Array.isArray(videos) && videos.length > 0) {
           setResults(
             videos.map((v: any, i: number) => 
-              `${i + 1}. ${v.title}\n   채널: ${v.channel}\n   링크: ${v.url}\n`
+              `${i + 1}. ${v.title || v.snippet?.title || '제목 없음'}\n   채널: ${v.channel || v.snippet?.channelTitle || '채널 없음'}\n   링크: ${v.url || `https://www.youtube.com/watch?v=${v.video_id || v.id?.videoId || ''}`}\n`
             ).join('\n')
           )
+        } else if (data.error) {
+          setError(data.error)
+          setResults('')
         } else {
-          setResults(JSON.stringify(videos, null, 2))
+          setResults('검색 결과가 없습니다.')
         }
       } else {
-        // 시뮬레이션 모드
-        await new Promise((resolve) => setTimeout(resolve, 1500))
-        setResults(
-          `"${query}"에 대한 YouTube 검색 결과 (시뮬레이션 모드)\n\n` +
-          `검색 결과가 여기에 표시됩니다. 실제 기능을 사용하려면 YouTube API 키를 설정해주세요.\n\n` +
-          `현재는 시뮬레이션 모드로 작동합니다.`
-        )
+        const errorMsg = apiResponse.error || 'API 호출에 실패했습니다.'
+        setError(errorMsg)
+        setResults('')
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : '알 수 없는 오류가 발생했습니다.')
@@ -110,14 +112,6 @@ const PerplexityYouTube = () => {
         {activeTab === 'perplexity' && (
           <div className="section">
             <h3>🌐 최신 음악 교육 정보 조사 (Perplexity)</h3>
-            <div className="info-box">
-              <p>🔑 <strong>Perplexity API 활성화 방법:</strong></p>
-              <ol>
-                <li>Perplexity API 키 발급: https://www.perplexity.ai/settings/api</li>
-                <li>환경 변수로 설정</li>
-                <li>최신 음악 교육 연구, 곡 배경 정보, 교육 자료 등을 실시간으로 조사할 수 있습니다.</li>
-              </ol>
-            </div>
 
             <div className="form-group">
               <label>조사 유형</label>
@@ -178,15 +172,6 @@ const PerplexityYouTube = () => {
         {activeTab === 'youtube' && (
           <div className="section">
             <h3>📺 음악 교육 영상 찾기 (YouTube)</h3>
-            <div className="info-box">
-              <p>🔑 <strong>YouTube API 활성화 방법:</strong></p>
-              <ol>
-                <li>Google Cloud Console에서 프로젝트 생성</li>
-                <li>YouTube Data API v3 활성화</li>
-                <li>API 키 생성</li>
-                <li>환경 변수로 설정</li>
-              </ol>
-            </div>
 
             <div className="form-group">
               <label>영상 유형</label>

@@ -37,19 +37,19 @@ const AIAssistant = () => {
       
       if (apiResponse.success && apiResponse.data) {
         const data = apiResponse.data as any
-        setResponse(data.response || data)
+        if (data.response) {
+          setResponse(data.response)
+        } else if (data.error) {
+          setError(data.error)
+          setResponse('')
+        } else {
+          setResponse(JSON.stringify(data))
+        }
       } else {
-        // 시뮬레이션 모드
-        await new Promise((resolve) => setTimeout(resolve, 1500))
-        setResponse(
-          `질문: "${question}"\n\n` +
-          `AI 답변 (시뮬레이션 모드):\n` +
-          `이 질문에 대한 답변입니다. 실제 기능을 사용하려면 OpenAI API 키를 설정하고 백엔드 API를 연결해주세요.\n\n` +
-          `현재는 시뮬레이션 모드로 작동하며, 실제 AI 답변을 받으려면:\n` +
-          `1. OpenAI API 키 발급\n` +
-          `2. 백엔드 API 설정\n` +
-          `3. 환경 변수 설정이 필요합니다.`
-        )
+        // API 오류 처리
+        const errorMsg = apiResponse.error || 'API 호출에 실패했습니다.'
+        setError(errorMsg)
+        setResponse('')
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : '알 수 없는 오류가 발생했습니다.')
@@ -74,15 +74,18 @@ const AIAssistant = () => {
       
       if (apiResponse.success && apiResponse.data) {
         const data = apiResponse.data as any
-        setResponse(data.explanation || data)
+        if (data.explanation) {
+          setResponse(data.explanation)
+        } else if (data.error) {
+          setError(data.error)
+          setResponse('')
+        } else {
+          setResponse(JSON.stringify(data))
+        }
       } else {
-        // 시뮬레이션 모드
-        await new Promise((resolve) => setTimeout(resolve, 1500))
-        setResponse(
-          `"${topic}"에 대한 설명 (${studentAge}세용)\n\n` +
-          `이 주제에 대한 초등학생 수준의 설명입니다. 실제 기능을 사용하려면 OpenAI API 키를 설정해주세요.\n\n` +
-          `현재는 시뮬레이션 모드로 작동합니다.`
-        )
+        const errorMsg = apiResponse.error || 'API 호출에 실패했습니다.'
+        setError(errorMsg)
+        setResponse('')
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : '알 수 없는 오류가 발생했습니다.')
@@ -106,22 +109,18 @@ const AIAssistant = () => {
       
       if (apiResponse.success && apiResponse.data) {
         const data = apiResponse.data as any
-        setLessonPlan(data.plan || data)
+        if (data.plan) {
+          setLessonPlan(data.plan)
+        } else if (data.error) {
+          setError(data.error)
+          setLessonPlan('')
+        } else {
+          setLessonPlan(JSON.stringify(data))
+        }
       } else {
-        // 시뮬레이션 모드
-        await new Promise((resolve) => setTimeout(resolve, 2000))
-        setLessonPlan(
-          `"${songTitle}" 수업 계획 (${gradeLevel}, ${lessonDuration}분)\n\n` +
-          `1. 도입 (5분)\n` +
-          `   - 곡 소개 및 학습 목표 제시\n\n` +
-          `2. 전개 (30분)\n` +
-          `   - 계이름 익히기\n` +
-          `   - 리듬 연습\n` +
-          `   - 악보 읽기\n\n` +
-          `3. 정리 (5분)\n` +
-          `   - 복습 및 평가\n\n` +
-          `실제 기능을 사용하려면 OpenAI API 키를 설정해주세요.`
-        )
+        const errorMsg = apiResponse.error || 'API 호출에 실패했습니다.'
+        setError(errorMsg)
+        setLessonPlan('')
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : '알 수 없는 오류가 발생했습니다.')
@@ -177,14 +176,6 @@ const AIAssistant = () => {
         {activeTab === 'chat' && (
           <div className="section">
             <h3>💬 AI 선생님께 질문하기</h3>
-            <div className="info-box">
-              <p>🔑 <strong>AI 기능 활성화 방법:</strong></p>
-              <ol>
-                <li>OpenAI API 키 발급: https://platform.openai.com/api-keys</li>
-                <li>환경 변수로 설정</li>
-                <li>API 키 없이도 기본 기능은 사용 가능합니다.</li>
-              </ol>
-            </div>
 
             <div className="form-group">
               <label>질문 맥락</label>

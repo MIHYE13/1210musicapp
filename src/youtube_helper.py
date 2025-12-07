@@ -3,14 +3,33 @@ YouTube Helper Module
 Uses YouTube Data API to find educational videos and resources
 """
 
-import streamlit as st
+try:
+    import streamlit as st
+    HAS_STREAMLIT = True
+except ImportError:
+    HAS_STREAMLIT = False
+    st = None
+
 from typing import Optional, List, Dict
 import requests
 import os
-from dotenv import load_dotenv
+from pathlib import Path
 
-# Load environment variables from .env file
-load_dotenv()
+# Load environment variables from .env file in project root
+try:
+    from dotenv import load_dotenv
+    # Find project root (parent of src directory)
+    project_root = Path(__file__).parent.parent
+    env_path = project_root / '.env'
+    if env_path.exists():
+        load_dotenv(env_path)
+    else:
+        # Fallback: try current directory
+        load_dotenv()
+except ImportError:
+    pass  # python-dotenv not installed, use system env vars only
+except Exception:
+    pass  # Failed to load .env, use system env vars only
 
 class YouTubeHelper:
     """YouTube API helper for finding music education videos"""
@@ -28,12 +47,13 @@ class YouTubeHelper:
     def _get_api_key(self) -> Optional[str]:
         """Get API key from multiple sources (priority order)"""
         # 1. Try Streamlit secrets (for cloud deployment)
-        try:
-            key = st.secrets.get("YOUTUBE_API_KEY")
-            if key:
-                return key
-        except:
-            pass
+        if HAS_STREAMLIT and st:
+            try:
+                key = st.secrets.get("YOUTUBE_API_KEY")
+                if key:
+                    return key
+            except:
+                pass
         
         # 2. Try environment variable (from .env file or system)
         key = os.getenv("YOUTUBE_API_KEY")
@@ -98,11 +118,17 @@ class YouTubeHelper:
                 
                 return videos
             else:
-                st.warning(f"YouTube API 오류: {response.status_code}")
+                if HAS_STREAMLIT and st:
+                    st.warning(f"YouTube API 오류: {response.status_code}")
+                else:
+                    print(f"YouTube API 오류: {response.status_code}")
                 return self._fallback_video_search(query)
                 
         except Exception as e:
-            st.warning(f"YouTube 검색 오류: {str(e)}")
+            if HAS_STREAMLIT and st:
+                st.warning(f"YouTube 검색 오류: {str(e)}")
+            else:
+                print(f"YouTube 검색 오류: {str(e)}")
             return self._fallback_video_search(query)
     
     def find_tutorial_videos(self, instrument: str, song_title: str = None) -> List[Dict]:

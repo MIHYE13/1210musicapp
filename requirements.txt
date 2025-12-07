@@ -1,5 +1,8 @@
 # Core Framework
 streamlit==1.38.0
+fastapi==0.109.0
+uvicorn[standard]==0.27.0
+python-multipart==0.0.9
 
 # Environment Variables
 python-dotenv==1.0.0

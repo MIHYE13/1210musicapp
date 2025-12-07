@@ -20,7 +20,14 @@ const ApiKeyStatus = () => {
     
     // 백엔드 API를 통해 API 키 상태 확인
     try {
-      const response = await fetch('http://localhost:8501/api/keys/status')
+      const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8501/api'
+      const response = await fetch(`${apiBaseUrl}/keys/status`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      })
+      
       if (response.ok) {
         const data = await response.json()
         setApiStatuses(data.statuses || [])
@@ -29,8 +36,19 @@ const ApiKeyStatus = () => {
         checkLocalApiKeys()
       }
     } catch (error) {
-      // 백엔드가 없을 경우 로컬에서 확인
-      checkLocalApiKeys()
+      // 네트워크 오류 처리
+      if (error instanceof TypeError && error.message.includes('fetch')) {
+        setApiStatuses([
+          { 
+            name: 'API 서버', 
+            status: 'not_set', 
+            message: `서버에 연결할 수 없습니다. (${apiBaseUrl})` 
+          },
+        ])
+      } else {
+        // 백엔드가 없을 경우 로컬에서 확인
+        checkLocalApiKeys()
+      }
     } finally {
       setIsChecking(false)
     }

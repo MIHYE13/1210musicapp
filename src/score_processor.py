@@ -3,7 +3,13 @@ Score Processing Module
 Handles score loading, simplification, transposition, and solfege addition
 """
 
-import streamlit as st
+try:
+    import streamlit as st
+    HAS_STREAMLIT = True
+except ImportError:
+    HAS_STREAMLIT = False
+    st = None
+
 from music21 import stream, note, chord, key, interval, converter
 from typing import Optional
 import tempfile
@@ -67,7 +73,34 @@ class ScoreProcessor:
             return score
             
         except Exception as e:
-            st.error(f"악보 로딩 오류: {str(e)}")
+            try:
+                import st
+                st.error(f"악보 로딩 오류: {str(e)}")
+            except:
+                print(f"악보 로딩 오류: {str(e)}")
+            return None
+    
+    def load_score_from_path(self, score_path: str) -> Optional[stream.Score]:
+        """
+        Load score from file path
+        
+        Args:
+            score_path: Path to score file (MIDI, MusicXML, ABC)
+            
+        Returns:
+            music21.stream.Score object or None
+        """
+        try:
+            # Parse with music21
+            score = converter.parse(score_path)
+            return score
+            
+        except Exception as e:
+            try:
+                import st
+                st.error(f"악보 로딩 오류: {str(e)}")
+            except:
+                print(f"악보 로딩 오류: {str(e)}")
             return None
     
     def simplify_rhythm(self, score: stream.Score, 
@@ -267,7 +300,10 @@ class ScoreProcessor:
             return img_bytes
             
         except Exception as e:
-            st.warning(f"악보 이미지 생성 실패: {str(e)}")
+            if HAS_STREAMLIT and st:
+                st.warning(f"악보 이미지 생성 실패: {str(e)}")
+            else:
+                print(f"악보 이미지 생성 실패: {str(e)}")
             return None
     
     def export_midi(self, score: stream.Score) -> Optional[bytes]:
@@ -293,7 +329,10 @@ class ScoreProcessor:
             return midi_bytes
             
         except Exception as e:
-            st.error(f"MIDI 내보내기 실패: {str(e)}")
+            if HAS_STREAMLIT and st:
+                st.error(f"MIDI 내보내기 실패: {str(e)}")
+            else:
+                print(f"MIDI 내보내기 실패: {str(e)}")
             return None
     
     def export_musicxml(self, score: stream.Score) -> Optional[bytes]:
@@ -319,7 +358,10 @@ class ScoreProcessor:
             return xml_bytes
             
         except Exception as e:
-            st.error(f"MusicXML 내보내기 실패: {str(e)}")
+            if HAS_STREAMLIT and st:
+                st.error(f"MusicXML 내보내기 실패: {str(e)}")
+            else:
+                print(f"MusicXML 내보내기 실패: {str(e)}")
             return None
     
     def get_score_info(self, score: stream.Score) -> dict:

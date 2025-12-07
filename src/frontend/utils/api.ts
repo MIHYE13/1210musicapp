@@ -1,5 +1,8 @@
 // API 클라이언트 유틸리티
 
+// API Base URL 설정
+// 개발 환경: http://localhost:8501/api
+// 프로덕션: 환경 변수 VITE_API_BASE_URL 사용
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8501/api'
 
 export interface ApiResponse<T> {
@@ -10,17 +13,40 @@ export interface ApiResponse<T> {
 
 class ApiClient {
   private baseUrl: string
+  private timeout: number
 
-  constructor(baseUrl: string = API_BASE_URL) {
+  constructor(baseUrl: string = API_BASE_URL, timeout: number = 30000) {
     this.baseUrl = baseUrl
+    this.timeout = timeout
+  }
+
+  private async fetchWithTimeout(url: string, options: RequestInit): Promise<Response> {
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), this.timeout)
+    
+    try {
+      const response = await fetch(url, {
+        ...options,
+        signal: controller.signal,
+      })
+      clearTimeout(timeoutId)
+      return response
+    } catch (error) {
+      clearTimeout(timeoutId)
+      if (error instanceof Error && error.name === 'AbortError') {
+        throw new Error('요청 시간이 초과되었습니다. 서버 응답을 기다리는 중입니다.')
+      }
+      throw error
+    }
   }
 
   async request<T>(
     endpoint: string,
-    options: RequestInit = {}
+    options: RequestInit = {},
+    returnBlob: boolean = false
   ): Promise<ApiResponse<T>> {
     try {
-      const response = await fetch(`${this.baseUrl}${endpoint}`, {
+      const response = await this.fetchWithTimeout(`${this.baseUrl}${endpoint}`, {
         ...options,
         headers: {
           'Content-Type': 'application/json',
@@ -29,15 +55,46 @@ class ApiClient {
       })
 
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`)
+        const errorText = await response.text()
+        let errorMessage = `HTTP error! status: ${response.status}`
+        try {
+          const errorData = JSON.parse(errorText)
+          errorMessage = errorData.detail || errorData.error || errorMessage
+        } catch {
+          errorMessage = errorText || errorMessage
+        }
+        throw new Error(errorMessage)
       }
 
-      const data = await response.json()
+      let data: any
+      if (returnBlob) {
+        // Blob 응답 처리 (파일 다운로드)
+        const contentType = response.headers.get('content-type') || ''
+        if (contentType.includes('application/json')) {
+          // JSON 오류 응답인 경우
+          data = await response.json()
+        } else {
+          // 실제 파일 데이터
+          data = await response.blob()
+        }
+      } else {
+        // JSON 응답 처리
+        data = await response.json()
+      }
       return { success: true, data }
     } catch (error) {
+      // 네트워크 오류 처리
+      if (error instanceof TypeError && error.message.includes('fetch')) {
+        return {
+          success: false,
+          error: `API 서버에 연결할 수 없습니다. 서버가 실행 중인지 확인하세요. (${this.baseUrl})`,
+        }
+      }
+      
+      // 기타 오류
       return {
         success: false,
-        error: error instanceof Error ? error.message : 'Unknown error',
+        error: error instanceof Error ? error.message : '알 수 없는 오류가 발생했습니다.',
       }
     }
   }
@@ -53,25 +110,48 @@ class ApiClient {
 
       if (additionalData) {
         Object.entries(additionalData).forEach(([key, value]) => {
-          formData.append(key, JSON.stringify(value))
+          if (key === 'options' && typeof value === 'object') {
+            // 옵션은 JSON 문자열로 변환
+            formData.append(key, JSON.stringify(value))
+          } else {
+            formData.append(key, String(value))
+          }
         })
       }
 
-      const response = await fetch(`${this.baseUrl}${endpoint}`, {
+      const response = await this.fetchWithTimeout(`${this.baseUrl}${endpoint}`, {
         method: 'POST',
         body: formData,
+        // Content-Type 헤더를 설정하지 않음 (브라우저가 자동으로 multipart/form-data 설정)
       })
 
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`)
+        const errorText = await response.text()
+        let errorMessage = `HTTP error! status: ${response.status}`
+        try {
+          const errorData = JSON.parse(errorText)
+          errorMessage = errorData.detail || errorData.error || errorMessage
+        } catch {
+          errorMessage = errorText || errorMessage
+        }
+        throw new Error(errorMessage)
       }
 
       const data = await response.json()
       return { success: true, data }
     } catch (error) {
+      // 네트워크 오류 처리
+      if (error instanceof TypeError && error.message.includes('fetch')) {
+        return {
+          success: false,
+          error: `API 서버에 연결할 수 없습니다. 서버가 실행 중인지 확인하세요. (${this.baseUrl})`,
+        }
+      }
+      
+      // 기타 오류
       return {
         success: false,
-        error: error instanceof Error ? error.message : 'Unknown error',
+        error: error instanceof Error ? error.message : '알 수 없는 오류가 발생했습니다.',
       }
     }
   }
@@ -95,10 +175,19 @@ export const scoreApi = {
     apiClient.uploadFile('/score/process', file, { options }),
   
   exportMidi: (scoreId: string) =>
-    apiClient.request(`/score/${scoreId}/export/midi`),
+    apiClient.request(`/score/${scoreId}/export/midi`, {
+      method: 'GET',
+    }, true), // blob 응답 처리
+  
+  exportMp3: (scoreId: string) =>
+    apiClient.request(`/score/${scoreId}/export/mp3`, {
+      method: 'GET',
+    }, true), // blob 응답 처리
   
   exportMusicXML: (scoreId: string) =>
-    apiClient.request(`/score/${scoreId}/export/musicxml`),
+    apiClient.request(`/score/${scoreId}/export/musicxml`, {
+      method: 'GET',
+    }, true), // blob 응답 처리
 }
 
 export const aiApi = {
@@ -138,7 +227,13 @@ export const youtubeApi = {
 }
 
 export const chordApi = {
-  analyze: (file: File, fileType: 'midi' | 'youtube' | 'pdf') =>
+  analyze: (file: File, fileType: 'midi' | 'youtube' | 'pdf' | 'audio' | 'image') =>
     apiClient.uploadFile('/chord/analyze', file, { fileType }),
+  
+  analyzeYouTube: (youtubeUrl: string) =>
+    apiClient.request('/chord/analyze-youtube', {
+      method: 'POST',
+      body: JSON.stringify({ youtubeUrl }),
+    }),
 }
 

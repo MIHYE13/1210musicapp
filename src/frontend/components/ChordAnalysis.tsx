@@ -1,6 +1,7 @@
 import { useState, useRef } from 'react'
 import './ChordAnalysis.css'
 import { chordApi } from '../utils/api'
+import PianoKeyboard from './PianoKeyboard'
 
 const ChordAnalysis = () => {
   const [activeTab, setActiveTab] = useState<'midi' | 'youtube' | 'pdf'>('midi')
@@ -15,15 +16,17 @@ const ChordAnalysis = () => {
     const file = e.target.files?.[0]
     if (file) {
       if (activeTab === 'midi') {
-        const validExtensions = ['.mid', '.midi']
+        const validExtensions = ['.mid', '.midi', '.mp3', '.wav', '.mpeg']
         const fileExtension = '.' + file.name.split('.').pop()?.toLowerCase()
         if (!validExtensions.includes(fileExtension)) {
-          setError('MIDI 파일만 업로드 가능합니다.')
+          setError('MIDI 또는 오디오 파일(MP3, WAV)만 업로드 가능합니다.')
           return
         }
       } else if (activeTab === 'pdf') {
-        if (!file.name.toLowerCase().endsWith('.pdf')) {
-          setError('PDF 파일만 업로드 가능합니다.')
+        const validExtensions = ['.pdf', '.jpg', '.jpeg', '.png', '.gif', '.bmp']
+        const fileExtension = '.' + file.name.split('.').pop()?.toLowerCase()
+        if (!validExtensions.includes(fileExtension)) {
+          setError('PDF 또는 이미지 파일(JPG, PNG 등)만 업로드 가능합니다.')
           return
         }
       }
@@ -58,25 +61,36 @@ const ChordAnalysis = () => {
 
     try {
       if (activeTab === 'youtube') {
-        // YouTube 처리 (시뮬레이션)
-        await new Promise((resolve) => setTimeout(resolve, 2000))
-        setAnalysisResult({
-          message: 'YouTube 음원 분석이 완료되었습니다. (시뮬레이션 모드)',
-          note: '실제 기능을 사용하려면 백엔드 API가 필요합니다.',
-        })
-      } else {
-        const apiResponse = await chordApi.analyze(file!, activeTab)
+        // YouTube URL을 백엔드로 전송
+        const apiResponse = await chordApi.analyzeYouTube(youtubeUrl)
         
         if (apiResponse.success && apiResponse.data) {
           setAnalysisResult(apiResponse.data)
         } else {
-          // 시뮬레이션 모드
-          await new Promise((resolve) => setTimeout(resolve, 2000))
-          setAnalysisResult({
-            message: `${activeTab.toUpperCase()} 파일 분석이 완료되었습니다. (시뮬레이션 모드)`,
-            chords: ['C', 'F', 'G', 'Am'],
-            note: '실제 기능을 사용하려면 백엔드 API가 필요합니다.',
-          })
+          setError(apiResponse.error || 'YouTube 음원 분석에 실패했습니다.')
+        }
+      } else {
+        // 파일 타입 결정
+        const fileExtension = '.' + file!.name.split('.').pop()?.toLowerCase()
+        let fileType: 'midi' | 'youtube' | 'pdf' | 'audio' | 'image' = activeTab
+        
+        if (activeTab === 'midi' && ['.mp3', '.wav', '.mpeg'].includes(fileExtension)) {
+          fileType = 'audio'
+        } else if (activeTab === 'pdf') {
+          // 이미지 파일은 'image' 타입으로, PDF는 'pdf' 타입으로
+          if (['.jpg', '.jpeg', '.png', '.gif', '.bmp'].includes(fileExtension)) {
+            fileType = 'image'
+          } else {
+            fileType = 'pdf'
+          }
+        }
+        
+        const apiResponse = await chordApi.analyze(file!, fileType)
+        
+        if (apiResponse.success && apiResponse.data) {
+          setAnalysisResult(apiResponse.data)
+        } else {
+          setError(apiResponse.error || '화음 분석에 실패했습니다.')
         }
       }
     } catch (err) {
@@ -143,11 +157,12 @@ const ChordAnalysis = () => {
       <div className="tab-content">
         {activeTab === 'midi' && (
           <div className="section">
-            <h3>🎵 MIDI 반주 음원 분석</h3>
+            <h3>MIDI 반주 음원 분석</h3>
             <div className="info-box">
               <p><strong>기능:</strong></p>
               <ol>
-                <li>MIDI 파일의 화음을 자동 분석</li>
+                <li>MIDI 또는 오디오 파일(MP3, WAV)의 화음을 자동 분석</li>
+                <li>오디오 파일은 자동으로 MIDI로 변환 후 분석</li>
                 <li>다장조(C major)로 자동 변환</li>
                 <li>화음 코드를 피아노 건반에 표시</li>
                 <li>마디별 화음 진행 확인</li>
@@ -160,12 +175,12 @@ const ChordAnalysis = () => {
                 ref={fileInputRef}
                 type="file"
                 id="midi-upload"
-                accept=".mid,.midi"
+                accept=".mid,.midi,.mp3,.wav,.mpeg"
                 onChange={handleFileChange}
                 style={{ display: 'none' }}
               />
               <label htmlFor="midi-upload" className="upload-button">
-                📁 MIDI 파일 업로드
+                📁 MIDI/오디오 파일 업로드 (MIDI, MP3, WAV)
               </label>
               {file && (
                 <div className="file-info">
@@ -221,10 +236,36 @@ const ChordAnalysis = () => {
                     </div>
                   )}
                 </div>
-                <div className="piano-placeholder">
-                  <p>🎹 피아노 건반 표시 영역</p>
-                  <p className="note">실제 구현 시 피아노 건반이 여기에 표시됩니다.</p>
-                </div>
+
+                {/* 화음 정보가 있을 때 피아노 건반 표시 */}
+                {analysisResult.chordsInfo && analysisResult.chordsInfo.length > 0 && (
+                  <div className="piano-section">
+                    <h3>🎹 마디별 화음 반주 (처음 8마디)</h3>
+                    {analysisResult.chordsInfo.map((chordInfo: any, index: number) => (
+                      <PianoKeyboard
+                        key={index}
+                        chordNotes={chordInfo.notes || []}
+                        chordName={`마디 ${chordInfo.measure || index + 1}: ${chordInfo.chord_name || ''}`}
+                        interactive={true}
+                        octaves={[4, 5]}
+                      />
+                    ))}
+                  </div>
+                )}
+
+                {/* 단순 화음 리스트만 있을 때 첫 번째 화음 표시 */}
+                {analysisResult.chords && analysisResult.chords.length > 0 && !analysisResult.chordsInfo && (
+                  <div className="piano-section">
+                    <h3>🎹 화음 반주</h3>
+                    <PianoKeyboard
+                      chordNotes={[]}
+                      chordName={analysisResult.chords[0] || '화음'}
+                      interactive={true}
+                      octaves={[4, 5]}
+                    />
+                    <p className="note">💡 전체 화음 정보를 보려면 MIDI 파일을 업로드하세요.</p>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -232,7 +273,7 @@ const ChordAnalysis = () => {
 
         {activeTab === 'youtube' && (
           <div className="section">
-            <h3>📺 YouTube 음원 화음 분석</h3>
+            <h3>YouTube 음원 화음 분석</h3>
             <div className="info-box">
               <p><strong>기능:</strong></p>
               <ol>
@@ -291,11 +332,12 @@ const ChordAnalysis = () => {
 
         {activeTab === 'pdf' && (
           <div className="section">
-            <h3>📄 PDF 악보 화음 분석</h3>
+            <h3>PDF/이미지 악보 화음 분석</h3>
             <div className="info-box">
               <p><strong>기능:</strong></p>
               <ol>
-                <li>PDF 악보를 MusicXML로 변환</li>
+                <li>PDF 또는 이미지 파일(JPG, PNG)의 악보를 스캔하여 분석</li>
+                <li>OMR(Optical Music Recognition) 기술로 악보 인식</li>
                 <li>다장조로 변환</li>
                 <li>화음 자동 분석</li>
                 <li>피아노 건반에 표시</li>
@@ -307,12 +349,12 @@ const ChordAnalysis = () => {
                 ref={fileInputRef}
                 type="file"
                 id="pdf-upload"
-                accept=".pdf"
+                accept=".pdf,.jpg,.jpeg,.png,.gif,.bmp,image/*"
                 onChange={handleFileChange}
                 style={{ display: 'none' }}
               />
               <label htmlFor="pdf-upload" className="upload-button">
-                📁 PDF 파일 업로드
+                📁 PDF/이미지 파일 업로드 (PDF, JPG, PNG)
               </label>
               {file && (
                 <div className="file-info">
@@ -350,7 +392,12 @@ const ChordAnalysis = () => {
             )}
 
             <div className="info-box">
-              <p><strong>참고:</strong> PDF는 MuseScore 등으로 MusicXML로 변환 후 사용하세요.</p>
+              <p><strong>참고:</strong></p>
+              <ul>
+                <li>PDF와 이미지 파일은 OMR(Optical Music Recognition) 기술로 악보를 인식합니다.</li>
+                <li>인식 품질을 높이려면 깨끗한 스캔 이미지(300 DPI 이상)를 사용하세요.</li>
+                <li>인식이 어려운 경우 MuseScore 등으로 MusicXML로 변환 후 '악보 처리' 메뉴에서 사용하세요.</li>
+              </ul>
             </div>
 
             {analysisResult && (

@@ -87,11 +87,15 @@ pip install -r requirements.txt
 **🔐 방법 1: .env 파일 (권장)**
 
 ```bash
-# .env.example을 .env로 복사
-cp .env.example .env
+# env.template을 .env로 복사
+# Windows:
+copy env.template .env
+# macOS/Linux:
+cp env.template .env
 
 # 편집기로 열어 API 키 입력
-nano .env
+# Windows: notepad .env
+# macOS/Linux: nano .env
 ```
 
 `.env` 파일 예시:

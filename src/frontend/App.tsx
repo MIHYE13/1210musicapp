@@ -8,7 +8,6 @@ import AIAssistant from './components/AIAssistant'
 import PerplexityYouTube from './components/PerplexityYouTube'
 import TeacherDashboard from './components/TeacherDashboard'
 import ChordAnalysis from './components/ChordAnalysis'
-import ApiKeyStatus from './components/ApiKeyStatus'
 
 type Page = 
   | 'home' 
@@ -58,8 +57,6 @@ function App() {
             <div className="info-box">
               <p>👨‍🏫 <strong>교사이신가요?</strong> 위 메뉴에서 '교사 대시보드'를 선택하여 학급과 학생을 관리하세요!</p>
             </div>
-
-            <ApiKeyStatus />
 
             <div className="feature-grid">
               <div className="feature-card" onClick={() => handlePageChange('audio-to-score')}>

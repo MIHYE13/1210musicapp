@@ -14,13 +14,13 @@ const AudioToScore = () => {
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (file) {
-      // 파일 타입 검증
-      const validTypes = ['audio/mp3', 'audio/wav', 'audio/mpeg', 'audio/x-wav']
-      const validExtensions = ['.mp3', '.wav', '.mpeg']
+      // 파일 타입 검증 (오디오 + MIDI 지원)
+      const validTypes = ['audio/mp3', 'audio/wav', 'audio/mpeg', 'audio/x-wav', 'audio/midi', 'audio/mid']
+      const validExtensions = ['.mp3', '.wav', '.mpeg', '.mid', '.midi']
       const fileExtension = '.' + file.name.split('.').pop()?.toLowerCase()
       
       if (!validTypes.includes(file.type) && !validExtensions.includes(fileExtension)) {
-        setError('지원하지 않는 파일 형식입니다. MP3 또는 WAV 파일을 업로드해주세요.')
+        setError('지원하지 않는 파일 형식입니다. MP3, WAV, 또는 MIDI 파일을 업로드해주세요.')
         return
       }
 
@@ -47,24 +47,17 @@ const AudioToScore = () => {
     setScoreGenerated(false)
 
     try {
-      // 백엔드 API 호출 시도
+      // 백엔드 API 호출
       const response = await audioApi.processAudio(audioFile)
       
       if (response.success && response.data) {
         setScoreData(response.data)
         setScoreGenerated(true)
       } else {
-        // 백엔드가 없을 경우 시뮬레이션
-        // 실제 환경에서는 백엔드 API를 사용해야 합니다
-        await new Promise((resolve) => setTimeout(resolve, 2000))
-        
-        // 시뮬레이션 데이터
-        setScoreData({
-          scoreId: `score_${Date.now()}`,
-          message: '악보 생성이 완료되었습니다. (시뮬레이션 모드)',
-          note: '실제 기능을 사용하려면 백엔드 API를 설정해주세요.',
-        })
-        setScoreGenerated(true)
+        // API 오류 처리
+        const errorMsg = response.error || '오디오 처리에 실패했습니다.'
+        setError(errorMsg)
+        setScoreGenerated(false)
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : '알 수 없는 오류가 발생했습니다.')
@@ -94,12 +87,12 @@ const AudioToScore = () => {
             ref={fileInputRef}
             type="file"
             id="audio-upload"
-            accept="audio/mp3,audio/wav,audio/mpeg,.mp3,.wav"
+            accept="audio/mp3,audio/wav,audio/mpeg,audio/midi,audio/mid,.mp3,.wav,.mid,.midi"
             onChange={handleFileChange}
             style={{ display: 'none' }}
           />
           <label htmlFor="audio-upload" className="upload-button">
-            📁 오디오 파일 업로드 (MP3, WAV)
+            📁 오디오/MIDI 파일 업로드 (MP3, WAV, MIDI)
           </label>
           {audioFile && (
             <div className="file-info">
@@ -186,10 +179,6 @@ const AudioToScore = () => {
           <li>AI가 멜로디를 추출하여 악보를 만듭니다 (최대 2분 소요)</li>
           <li>"악보 처리" 메뉴에서 계속 진행하세요</li>
         </ol>
-        <div className="warning-box">
-          <p>⚠️ <strong>참고:</strong> 실제 오디오 처리를 위해서는 백엔드 API가 필요합니다.</p>
-          <p>현재는 시뮬레이션 모드로 작동합니다.</p>
-        </div>
       </div>
     </div>
   )
