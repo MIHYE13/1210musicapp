@@ -122,12 +122,31 @@ app.add_middleware(
         "http://127.0.0.1:3000",
         "http://127.0.0.1:5173",
         "http://localhost:3001",
+        "*",  # 개발 환경에서 모든 origin 허용
     ],
     allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
+    allow_methods=["*"],
     allow_headers=["*"],
     expose_headers=["*"],
 )
+
+# 전역 예외 핸들러 추가
+@app.exception_handler(Exception)
+async def global_exception_handler(request, exc):
+    """전역 예외 처리"""
+    import traceback
+    error_detail = str(exc)
+    print(f"[ERROR] 전역 예외 발생: {error_detail}")
+    print(traceback.format_exc())
+    
+    return JSONResponse(
+        status_code=500,
+        content={
+            "success": False,
+            "error": f"서버 오류가 발생했습니다: {error_detail}",
+            "detail": error_detail
+        }
+    )
 
 # Initialize processors (singleton pattern) with error handling
 audio_processor = AudioProcessor() if HAS_AUDIO_PROCESSOR else None

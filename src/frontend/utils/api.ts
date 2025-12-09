@@ -138,20 +138,30 @@ class ApiClient {
       }
 
       const data = await response.json()
+      
+      // API 응답에 success 필드가 있는 경우 확인
+      if (data && typeof data === 'object' && 'success' in data && !data.success) {
+        return {
+          success: false,
+          error: data.error || data.detail || 'API 요청이 실패했습니다.',
+        }
+      }
+      
       return { success: true, data }
     } catch (error) {
       // 네트워크 오류 처리
-      if (error instanceof TypeError && error.message.includes('fetch')) {
+      if (error instanceof TypeError && (error.message.includes('fetch') || error.message.includes('Failed to fetch'))) {
         return {
           success: false,
-          error: `API 서버에 연결할 수 없습니다. 서버가 실행 중인지 확인하세요. (${this.baseUrl})`,
+          error: `API 서버에 연결할 수 없습니다. 서버가 실행 중인지 확인하세요.\n\n해결 방법:\n1. API 서버 시작: python start_api_simple.py\n2. 서버 주소: ${this.baseUrl}`,
         }
       }
       
       // 기타 오류
+      const errorMessage = error instanceof Error ? error.message : '알 수 없는 오류가 발생했습니다.'
       return {
         success: false,
-        error: error instanceof Error ? error.message : '알 수 없는 오류가 발생했습니다.',
+        error: errorMessage,
       }
     }
   }
