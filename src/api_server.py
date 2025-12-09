@@ -166,7 +166,10 @@ async def root():
     return {
         "message": "초등 음악 도우미 API",
         "version": "1.0.0",
+        "status": "running",
         "endpoints": {
+            "health": "/api/health",
+            "keys": "/api/keys/status",
             "audio": "/api/audio/process",
             "score": "/api/score/process",
             "ai": "/api/ai/chat",
@@ -179,7 +182,19 @@ async def root():
 @app.get("/api/health")
 async def health_check():
     """헬스 체크 엔드포인트"""
-    return {"status": "healthy", "message": "API is running"}
+    return {
+        "status": "healthy",
+        "message": "API is running",
+        "modules": {
+            "audio_processor": HAS_AUDIO_PROCESSOR,
+            "score_processor": HAS_SCORE_PROCESSOR,
+            "chord_generator": HAS_CHORD_GENERATOR,
+            "ai_assistant": HAS_AI_ASSISTANT,
+            "perplexity_assistant": HAS_PERPLEXITY_ASSISTANT,
+            "youtube_helper": HAS_YOUTUBE_HELPER,
+            "chord_analyzer": HAS_CHORD_ANALYZER,
+        }
+    }
 
 @app.get("/api/keys/status")
 async def get_api_keys_status():
