@@ -50,7 +50,7 @@ try:
     from audio_processor import AudioProcessor
     HAS_AUDIO_PROCESSOR = True
 except ImportError as e:
-    print(f"⚠️  audio_processor를 불러올 수 없습니다: {e}")
+    print(f"[WARN] audio_processor를 불러올 수 없습니다: {e}")
     HAS_AUDIO_PROCESSOR = False
     AudioProcessor = None
 
@@ -58,7 +58,7 @@ try:
     from score_processor import ScoreProcessor
     HAS_SCORE_PROCESSOR = True
 except ImportError as e:
-    print(f"⚠️  score_processor를 불러올 수 없습니다: {e}")
+    print(f"[WARN] score_processor를 불러올 수 없습니다: {e}")
     HAS_SCORE_PROCESSOR = False
     ScoreProcessor = None
 
@@ -66,7 +66,7 @@ try:
     from chord_generator import ChordGenerator
     HAS_CHORD_GENERATOR = True
 except ImportError as e:
-    print(f"⚠️  chord_generator를 불러올 수 없습니다: {e}")
+    print(f"[WARN] chord_generator를 불러올 수 없습니다: {e}")
     HAS_CHORD_GENERATOR = False
     ChordGenerator = None
 
@@ -74,7 +74,7 @@ try:
     from ai_assistant import AIAssistant
     HAS_AI_ASSISTANT = True
 except ImportError as e:
-    print(f"⚠️  ai_assistant를 불러올 수 없습니다: {e}")
+    print(f"[WARN] ai_assistant를 불러올 수 없습니다: {e}")
     HAS_AI_ASSISTANT = False
     AIAssistant = None
 
@@ -82,7 +82,7 @@ try:
     from perplexity_assistant import PerplexityAssistant
     HAS_PERPLEXITY_ASSISTANT = True
 except ImportError as e:
-    print(f"⚠️  perplexity_assistant를 불러올 수 없습니다: {e}")
+    print(f"[WARN] perplexity_assistant를 불러올 수 없습니다: {e}")
     HAS_PERPLEXITY_ASSISTANT = False
     PerplexityAssistant = None
 
@@ -90,7 +90,7 @@ try:
     from youtube_helper import YouTubeHelper
     HAS_YOUTUBE_HELPER = True
 except ImportError as e:
-    print(f"⚠️  youtube_helper를 불러올 수 없습니다: {e}")
+    print(f"[WARN] youtube_helper를 불러올 수 없습니다: {e}")
     HAS_YOUTUBE_HELPER = False
     YouTubeHelper = None
 
@@ -98,7 +98,7 @@ try:
     from chord_analyzer import ChordAnalyzer
     HAS_CHORD_ANALYZER = True
 except ImportError as e:
-    print(f"⚠️  chord_analyzer를 불러올 수 없습니다: {e}")
+    print(f"[WARN] chord_analyzer를 불러올 수 없습니다: {e}")
     HAS_CHORD_ANALYZER = False
     ChordAnalyzer = None
 
