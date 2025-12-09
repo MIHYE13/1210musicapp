@@ -31,11 +31,19 @@ class AudioProcessor:
         try:
             from basic_pitch.inference import predict
             return predict
-        except ImportError:
+        except ImportError as e:
+            error_msg = f"basic-pitch 라이브러리가 설치되지 않았습니다. pip install basic-pitch를 실행해주세요. 오류: {str(e)}"
             if HAS_STREAMLIT and st:
-                st.error("basic-pitch 라이브러리를 설치해주세요: pip install basic-pitch")
+                st.error(error_msg)
             else:
-                print("basic-pitch 라이브러리를 설치해주세요: pip install basic-pitch")
+                print(f"[ERROR] {error_msg}")
+            return None
+        except Exception as e:
+            error_msg = f"basic-pitch 모델 로드 중 오류 발생: {str(e)}"
+            if HAS_STREAMLIT and st:
+                st.error(error_msg)
+            else:
+                print(f"[ERROR] {error_msg}")
             return None
     
     def process_audio(self, audio_file) -> Optional[stream.Score]:

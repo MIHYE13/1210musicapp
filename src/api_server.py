@@ -252,7 +252,17 @@ async def process_audio(file: UploadFile = File(...)):
                 raise HTTPException(status_code=503, detail="Audio Processor 모듈을 사용할 수 없습니다.")
             
             # 오디오 처리
-            score = audio_processor.process_audio_from_path(tmp_path)
+            try:
+                score = audio_processor.process_audio_from_path(tmp_path)
+            except Exception as e:
+                import traceback
+                error_detail = f"오디오 처리 중 오류 발생: {str(e)}"
+                print(f"[ERROR] {error_detail}")
+                print(traceback.format_exc())
+                raise HTTPException(
+                    status_code=500, 
+                    detail=f"악보 생성에 실패했습니다. {error_detail}. basic-pitch가 설치되어 있는지 확인해주세요."
+                )
             
             if score:
                 score_id = f"score_{len(score_storage)}"
@@ -265,7 +275,10 @@ async def process_audio(file: UploadFile = File(...)):
                     "note": "실제 악보 렌더링은 클라이언트에서 처리됩니다."
                 }
             else:
-                raise HTTPException(status_code=500, detail="악보 생성에 실패했습니다. 오디오 파일을 확인해주세요.")
+                raise HTTPException(
+                    status_code=500, 
+                    detail="악보 생성에 실패했습니다. 오디오 파일을 확인해주세요. basic-pitch가 설치되어 있는지 확인하세요: pip install basic-pitch"
+                )
         finally:
             # 임시 파일 삭제
             if os.path.exists(tmp_path):
