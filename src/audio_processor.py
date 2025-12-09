@@ -36,14 +36,81 @@ class AudioProcessor:
             if HAS_STREAMLIT and st:
                 st.error(error_msg)
             else:
-                print(f"[ERROR] {error_msg}")
+                print(f"[WARN] {error_msg}")
             return None
         except Exception as e:
             error_msg = f"basic-pitch 모델 로드 중 오류 발생: {str(e)}"
             if HAS_STREAMLIT and st:
                 st.error(error_msg)
             else:
-                print(f"[ERROR] {error_msg}")
+                print(f"[WARN] {error_msg}")
+            return None
+    
+    def _process_audio_with_librosa(self, audio_path: str) -> Optional[stream.Score]:
+        """
+        Process audio using librosa (fallback method when basic-pitch is not available)
+        This is a simpler method that extracts pitch using librosa's pitch detection
+        """
+        try:
+            import librosa
+            import librosa.display
+            
+            # Load audio file
+            y, sr = librosa.load(audio_path, sr=22050)
+            
+            # Extract pitch using librosa's pyin algorithm
+            f0, voiced_flag, voiced_probs = librosa.pyin(
+                y,
+                fmin=librosa.note_to_hz('C2'),
+                fmax=librosa.note_to_hz('C7')
+            )
+            
+            # Create score
+            s = stream.Score()
+            s.metadata = stream.metadata.Metadata()
+            s.metadata.title = "추출된 멜로디 (librosa)"
+            
+            # Create part
+            part = stream.Part()
+            part.append(meter.TimeSignature('4/4'))
+            part.append(tempo.MetronomeMark(number=120))
+            part.append(key.Key('C'))
+            
+            # Convert pitch to notes
+            time_step = 0.5  # 0.5초 간격으로 노트 생성
+            current_time = 0.0
+            
+            for i, pitch_hz in enumerate(f0):
+                if not np.isnan(pitch_hz) and voiced_flag[i]:
+                    # Convert Hz to MIDI note number
+                    midi_num = librosa.hz_to_midi(pitch_hz)
+                    
+                    # Round to nearest semitone
+                    midi_num = int(round(midi_num))
+                    
+                    # Create note
+                    n = note.Note(midi=midi_num)
+                    n.quarterLength = 0.5
+                    n.offset = current_time
+                    
+                    part.append(n)
+                    current_time += 0.5
+            
+            # If no notes found, return None
+            if len(part.notes) == 0:
+                print("[WARN] librosa로 음표를 추출할 수 없습니다.")
+                return None
+            
+            s.append(part)
+            return s
+            
+        except ImportError:
+            print("[ERROR] librosa가 설치되지 않았습니다.")
+            return None
+        except Exception as e:
+            print(f"[ERROR] librosa 오디오 처리 오류: {str(e)}")
+            import traceback
+            traceback.print_exc()
             return None
     
     def process_audio(self, audio_file) -> Optional[stream.Score]:
@@ -97,25 +164,39 @@ class AudioProcessor:
             music21.stream.Score object or None if failed
         """
         try:
-            # Load basic-pitch model
+            # Try basic-pitch first (more accurate)
             predict = self._load_basic_pitch_model()
-            if predict is None:
+            if predict is not None:
+                try:
+                    # Predict MIDI from audio
+                    model_output, midi_data, note_events = predict(audio_path)
+                    
+                    # Convert MIDI to music21 score
+                    score = self._midi_to_score(midi_data, note_events)
+                    
+                    if score and len(score.flat.notes) > 0:
+                        return score
+                except Exception as e:
+                    print(f"[WARN] basic-pitch 처리 실패, librosa로 대체 시도: {str(e)}")
+            
+            # Fallback to librosa if basic-pitch is not available or failed
+            print("[INFO] librosa를 사용하여 오디오 처리 중...")
+            score = self._process_audio_with_librosa(audio_path)
+            
+            if score and len(score.flat.notes) > 0:
+                return score
+            else:
+                print("[ERROR] 오디오에서 음표를 추출할 수 없습니다.")
                 return None
-            
-            # Predict MIDI from audio
-            model_output, midi_data, note_events = predict(audio_path)
-            
-            # Convert MIDI to music21 score
-            score = self._midi_to_score(midi_data, note_events)
-            
-            return score
             
         except Exception as e:
             try:
                 import st
                 st.error(f"오디오 처리 오류: {str(e)}")
             except:
-                print(f"오디오 처리 오류: {str(e)}")
+                print(f"[ERROR] 오디오 처리 오류: {str(e)}")
+            import traceback
+            traceback.print_exc()
             return None
     
     def _midi_to_score(self, midi_data, note_events) -> stream.Score:
