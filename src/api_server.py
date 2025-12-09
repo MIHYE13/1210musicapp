@@ -18,9 +18,24 @@ import asyncio
 if sys.platform == 'win32':
     import io
     try:
-        sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
-        sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
-    except:
+        # stdout이 닫혀있지 않고 버퍼가 있는 경우에만 재설정
+        if hasattr(sys.stdout, 'closed') and not sys.stdout.closed:
+            if hasattr(sys.stdout, 'buffer') and sys.stdout.buffer is not None:
+                try:
+                    # 기존 wrapper가 있으면 제거하지 않고 그대로 사용
+                    if not isinstance(sys.stdout, io.TextIOWrapper):
+                        sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
+                except (AttributeError, ValueError, OSError):
+                    pass
+        if hasattr(sys.stderr, 'closed') and not sys.stderr.closed:
+            if hasattr(sys.stderr, 'buffer') and sys.stderr.buffer is not None:
+                try:
+                    if not isinstance(sys.stderr, io.TextIOWrapper):
+                        sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
+                except (AttributeError, ValueError, OSError):
+                    pass
+    except Exception:
+        # 모든 예외를 무시하고 계속 진행
         pass
 
 # Add src directory to path
