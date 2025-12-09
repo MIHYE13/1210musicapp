@@ -207,6 +207,11 @@ export const aiApi = {
       body: JSON.stringify({ question, context }),
     }),
   
+  clearChat: () =>
+    apiClient.request('/ai/chat/clear', {
+      method: 'POST',
+    }),
+  
   explainTheory: (topic: string, age: number) =>
     apiClient.request('/ai/explain-theory', {
       method: 'POST',

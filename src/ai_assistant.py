@@ -37,11 +37,16 @@ class AIAssistant:
     def __init__(self):
         """Initialize AI Assistant"""
         self.api_key = os.getenv("OPENAI_API_KEY")
+        self.conversation_history: List[Dict[str, str]] = []  # 대화 기록 저장
         if not self.api_key:
             if HAS_STREAMLIT and st:
                 st.warning("OpenAI API 키가 설정되지 않았습니다. .env 파일에 OPENAI_API_KEY를 추가하세요.")
             else:
                 print("OpenAI API 키가 설정되지 않았습니다. .env 파일에 OPENAI_API_KEY를 추가하세요.")
+    
+    def clear_history(self):
+        """대화 기록 초기화"""
+        self.conversation_history = []
     
     def chat(self, message: str, context: Optional[str] = None) -> Optional[str]:
         """

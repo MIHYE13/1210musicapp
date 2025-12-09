@@ -771,7 +771,7 @@ async def export_musicxml(score_id: str):
 
 @app.post("/api/ai/chat")
 async def ai_chat(request: dict):
-    """AI 채팅"""
+    """AI 채팅 - 즉시 응답 제공"""
     question = request.get("question")
     context = request.get("context")
     
@@ -779,61 +779,118 @@ async def ai_chat(request: dict):
         raise HTTPException(status_code=400, detail="질문을 입력해주세요.")
     
     try:
-        # 최신 OpenAI API 사용
+        # AI Assistant 모듈 확인
         if not HAS_AI_ASSISTANT or not ai_assistant:
-            return {
-                "success": False,
-                "error": "AI Assistant 모듈을 사용할 수 없습니다."
-            }
-        
-        if not HAS_AI_ASSISTANT or not ai_assistant:
-            return {
-                "success": False,
-                "error": "AI Assistant 모듈을 사용할 수 없습니다."
-            }
+            return JSONResponse(
+                status_code=503,
+                content={
+                    "success": False,
+                    "error": "AI Assistant 모듈을 사용할 수 없습니다."
+                }
+            )
         
         if not ai_assistant.api_key:
-            return {
-                "success": False,
-                "error": "OpenAI API 키가 설정되지 않았습니다."
-            }
+            return JSONResponse(
+                status_code=503,
+                content={
+                    "success": False,
+                    "error": "OpenAI API 키가 설정되지 않았습니다."
+                }
+            )
         
         from openai import OpenAI
         client = OpenAI(api_key=ai_assistant.api_key)
         
+        # 시스템 메시지 구성
         messages = [
-            {"role": "system", "content": "당신은 초등학교 음악 교육 전문가입니다. 학생과 교사를 도와주세요."}
+            {"role": "system", "content": "당신은 초등학교 음악 교육 전문가입니다. 학생과 교사를 도와주세요. 친근하고 이해하기 쉬운 언어로 답변해주세요."}
         ]
         
         if context:
             messages.append({"role": "system", "content": f"현재 상황: {context}"})
         
-        # 대화 기록 추가
-        messages.extend(ai_assistant.conversation_history[-5:])
+        # 대화 기록 추가 (최근 5개만)
+        if hasattr(ai_assistant, 'conversation_history') and ai_assistant.conversation_history:
+            messages.extend(ai_assistant.conversation_history[-5:])
+        
         messages.append({"role": "user", "content": question})
         
+        # 빠른 응답을 위해 gpt-4o-mini 사용 및 최적화된 설정
         response = client.chat.completions.create(
-            model="gpt-4",
+            model="gpt-4o-mini",  # 더 빠른 응답을 위해 mini 모델 사용
             messages=messages,
-            max_tokens=500,
-            temperature=0.8
+            max_tokens=400,  # 응답 길이 제한으로 속도 개선
+            temperature=0.7,
+            stream=False  # 스트리밍 비활성화로 안정성 확보
         )
         
         ai_response = response.choices[0].message.content.strip()
         
         # 대화 기록 업데이트
+        if not hasattr(ai_assistant, 'conversation_history'):
+            ai_assistant.conversation_history = []
+        
         ai_assistant.conversation_history.append({"role": "user", "content": question})
         ai_assistant.conversation_history.append({"role": "assistant", "content": ai_response})
         
-        return {
-            "success": True,
-            "response": ai_response
-        }
+        # 대화 기록이 너무 길어지면 최근 10개만 유지
+        if len(ai_assistant.conversation_history) > 10:
+            ai_assistant.conversation_history = ai_assistant.conversation_history[-10:]
+        
+        return JSONResponse(
+            status_code=200,
+            content={
+                "success": True,
+                "response": ai_response
+            }
+        )
     except Exception as e:
-        return {
-            "success": False,
-            "error": f"AI 채팅 오류: {str(e)}"
-        }
+        import traceback
+        error_detail = str(e)
+        print(f"[ERROR] AI 채팅 오류: {error_detail}")
+        print(traceback.format_exc())
+        
+        return JSONResponse(
+            status_code=500,
+            content={
+                "success": False,
+                "error": f"AI 채팅 오류: {error_detail}"
+            }
+        )
+
+@app.post("/api/ai/chat/clear")
+async def clear_chat():
+    """대화 기록 초기화"""
+    try:
+        if not HAS_AI_ASSISTANT or not ai_assistant:
+            return JSONResponse(
+                status_code=503,
+                content={
+                    "success": False,
+                    "error": "AI Assistant 모듈을 사용할 수 없습니다."
+                }
+            )
+        
+        if hasattr(ai_assistant, 'clear_history'):
+            ai_assistant.clear_history()
+        elif hasattr(ai_assistant, 'conversation_history'):
+            ai_assistant.conversation_history = []
+        
+        return JSONResponse(
+            status_code=200,
+            content={
+                "success": True,
+                "message": "대화 기록이 초기화되었습니다."
+            }
+        )
+    except Exception as e:
+        return JSONResponse(
+            status_code=500,
+            content={
+                "success": False,
+                "error": f"대화 초기화 오류: {str(e)}"
+            }
+        )
 
 @app.post("/api/ai/explain-theory")
 async def explain_theory(request: dict):

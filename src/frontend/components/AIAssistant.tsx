@@ -27,22 +27,27 @@ const AIAssistant = () => {
       return
     }
 
+    // 즉시 로딩 상태 표시
     setIsLoading(true)
     setError(null)
-    setResponse('')
+    setResponse('')  // 이전 응답 초기화
 
     try {
       const context = contextOption === '현재 악보에 대해' ? '현재 악보 컨텍스트' : undefined
       const apiResponse = await aiApi.chat(question, context)
       
+      // 응답을 즉시 표시
       if (apiResponse.success && apiResponse.data) {
         const data = apiResponse.data as any
         if (data.response) {
+          // 응답이 있으면 즉시 표시
           setResponse(data.response)
+          setError(null)
         } else if (data.error) {
           setError(data.error)
           setResponse('')
         } else {
+          // 예상치 못한 응답 형식
           setResponse(JSON.stringify(data))
         }
       } else {
@@ -52,8 +57,12 @@ const AIAssistant = () => {
         setResponse('')
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : '알 수 없는 오류가 발생했습니다.')
+      const errorMessage = err instanceof Error ? err.message : '알 수 없는 오류가 발생했습니다.'
+      setError(errorMessage)
+      setResponse('')
+      console.error('채팅 오류:', err)
     } finally {
+      // 로딩 상태 해제
       setIsLoading(false)
     }
   }
@@ -141,10 +150,22 @@ const AIAssistant = () => {
     URL.revokeObjectURL(url)
   }
 
-  const handleClearChat = () => {
-    setQuestion('')
-    setResponse('')
-    setError(null)
+  const handleClearChat = async () => {
+    try {
+      // API를 통해 대화 기록 초기화
+      await aiApi.clearChat()
+      
+      // 프론트엔드 상태 초기화
+      setQuestion('')
+      setResponse('')
+      setError(null)
+    } catch (err) {
+      // API 호출 실패해도 프론트엔드 상태는 초기화
+      setQuestion('')
+      setResponse('')
+      setError(null)
+      console.error('대화 초기화 오류:', err)
+    }
   }
 
   return (
@@ -198,7 +219,16 @@ const AIAssistant = () => {
                 rows={4}
                 value={question}
                 onChange={(e) => setQuestion(e.target.value)}
-                placeholder="예: 이 곡을 초등학교 3학년이 배우기에 적절한가요?"
+                onKeyDown={(e) => {
+                  // Ctrl+Enter 또는 Cmd+Enter로 전송
+                  if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+                    e.preventDefault()
+                    if (!isLoading && question.trim()) {
+                      handleAskQuestion()
+                    }
+                  }
+                }}
+                placeholder="예: 이 곡을 초등학교 3학년이 배우기에 적절한가요?&#10;(Ctrl+Enter 또는 Cmd+Enter로 전송)"
               />
             </div>
 
@@ -230,7 +260,17 @@ const AIAssistant = () => {
               </div>
             )}
 
-            {response && (
+            {isLoading && (
+              <div className="response-box loading">
+                <h4>🤔 AI가 답변을 생각하는 중...</h4>
+                <div className="response-content">
+                  <div className="loading-spinner">⏳</div>
+                  <p>잠시만 기다려주세요...</p>
+                </div>
+              </div>
+            )}
+
+            {response && !isLoading && (
               <div className="response-box">
                 <h4>🎵 AI 답변</h4>
                 <div className="response-content">{response}</div>
