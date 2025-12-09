@@ -55,15 +55,51 @@ class AudioProcessor:
             import librosa
             import librosa.display
             
-            # Load audio file
-            y, sr = librosa.load(audio_path, sr=22050)
+            print("[INFO] librosa를 사용하여 오디오 파일 로드 중...")
+            # Load audio file with better error handling
+            try:
+                y, sr = librosa.load(audio_path, sr=22050, mono=True, duration=60.0)  # 최대 60초만 처리
+            except Exception as e:
+                print(f"[ERROR] 오디오 파일 로드 실패: {str(e)}")
+                # 다른 샘플 레이트로 시도
+                try:
+                    y, sr = librosa.load(audio_path, sr=None, mono=True)
+                    y = librosa.resample(y, orig_sr=sr, target_sr=22050)
+                    sr = 22050
+                except Exception as e2:
+                    print(f"[ERROR] 오디오 파일 재시도 실패: {str(e2)}")
+                    return None
             
-            # Extract pitch using librosa's pyin algorithm
-            f0, voiced_flag, voiced_probs = librosa.pyin(
-                y,
-                fmin=librosa.note_to_hz('C2'),
-                fmax=librosa.note_to_hz('C7')
-            )
+            if len(y) == 0:
+                print("[ERROR] 오디오 파일이 비어있습니다.")
+                return None
+            
+            print(f"[INFO] 오디오 길이: {len(y)/sr:.2f}초, 샘플 레이트: {sr}Hz")
+            
+            # Extract pitch using librosa's pyin algorithm with better parameters
+            print("[INFO] 피치 추출 중...")
+            try:
+                f0, voiced_flag, voiced_probs = librosa.pyin(
+                    y,
+                    fmin=librosa.note_to_hz('C3'),  # C3부터 시작 (더 낮은 음 제외)
+                    fmax=librosa.note_to_hz('C6'),  # C6까지 (더 높은 음 제외)
+                    frame_length=2048,
+                    hop_length=512,
+                    threshold=0.1  # 더 낮은 임계값으로 더 많은 음표 감지
+                )
+            except Exception as e:
+                print(f"[ERROR] 피치 추출 실패: {str(e)}")
+                # 대안: chroma feature 사용
+                try:
+                    chroma = librosa.feature.chroma_stft(y=y, sr=sr)
+                    # 간단한 멜로디 추출 시도
+                    print("[INFO] chroma feature를 사용하여 멜로디 추출 시도...")
+                    # chroma에서 가장 강한 음을 찾기
+                    chroma_mean = np.mean(chroma, axis=1)
+                    # 이 방법은 복잡하므로 기본 방법으로 돌아감
+                    return None
+                except:
+                    return None
             
             # Create score
             s = stream.Score()
@@ -76,36 +112,60 @@ class AudioProcessor:
             part.append(tempo.MetronomeMark(number=120))
             part.append(key.Key('C'))
             
-            # Convert pitch to notes
-            time_step = 0.5  # 0.5초 간격으로 노트 생성
-            current_time = 0.0
+            # Convert pitch to notes with better filtering
+            time_step = 0.25  # 0.25초 간격으로 더 세밀하게
+            hop_samples = len(y) // len(f0) if len(f0) > 0 else 512
+            time_per_frame = hop_samples / sr
+            
+            notes_added = 0
+            last_note = None
+            note_duration = 0.0
             
             for i, pitch_hz in enumerate(f0):
-                if not np.isnan(pitch_hz) and voiced_flag[i]:
+                if not np.isnan(pitch_hz) and voiced_flag[i] and pitch_hz > 0:
                     # Convert Hz to MIDI note number
                     midi_num = librosa.hz_to_midi(pitch_hz)
                     
-                    # Round to nearest semitone
+                    # Round to nearest semitone and clamp to valid range
                     midi_num = int(round(midi_num))
+                    midi_num = max(48, min(84, midi_num))  # C3 to C6 범위
                     
-                    # Create note
-                    n = note.Note(midi=midi_num)
-                    n.quarterLength = 0.5
-                    n.offset = current_time
+                    current_time = i * time_per_frame
                     
-                    part.append(n)
-                    current_time += 0.5
+                    # 같은 음이면 duration 증가, 다른 음이면 새 노트 추가
+                    if last_note is not None and last_note.pitch.midi == midi_num:
+                        note_duration += time_per_frame
+                    else:
+                        # 이전 노트 저장
+                        if last_note is not None:
+                            last_note.quarterLength = max(0.25, min(2.0, note_duration * 2))
+                            part.append(last_note)
+                            notes_added += 1
+                        
+                        # 새 노트 생성
+                        n = note.Note(midi=midi_num)
+                        n.offset = current_time
+                        last_note = n
+                        note_duration = time_per_frame
+            
+            # 마지막 노트 추가
+            if last_note is not None:
+                last_note.quarterLength = max(0.25, min(2.0, note_duration * 2))
+                part.append(last_note)
+                notes_added += 1
             
             # If no notes found, return None
-            if len(part.notes) == 0:
-                print("[WARN] librosa로 음표를 추출할 수 없습니다.")
+            if notes_added == 0:
+                print("[WARN] librosa로 음표를 추출할 수 없습니다. 오디오 파일에 명확한 멜로디가 없을 수 있습니다.")
                 return None
             
+            print(f"[INFO] {notes_added}개의 음표를 추출했습니다.")
             s.append(part)
             return s
             
-        except ImportError:
-            print("[ERROR] librosa가 설치되지 않았습니다.")
+        except ImportError as e:
+            print(f"[ERROR] librosa가 설치되지 않았습니다: {str(e)}")
+            print("설치 방법: pip install librosa")
             return None
         except Exception as e:
             print(f"[ERROR] librosa 오디오 처리 오류: {str(e)}")

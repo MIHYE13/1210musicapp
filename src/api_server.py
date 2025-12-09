@@ -356,13 +356,28 @@ async def process_audio(file: UploadFile = File(...)):
                         "success": True,
                         "scoreId": score_id,
                         "message": "악보가 생성되었습니다.",
-                        "note": f"총 {len(score.flat.notes)}개의 음표가 추출되었습니다."
+                        "note": f"총 {len(score.flat.notes)}개의 음표가 추출되었습니다. (librosa 사용)"
                     }
                 )
             else:
+                # 더 자세한 오류 메시지 제공
+                error_msg = """악보 생성에 실패했습니다. 
+
+가능한 원인:
+1. 오디오 파일에 명확한 멜로디가 없을 수 있습니다
+2. 오디오 파일이 너무 짧거나 길 수 있습니다 (권장: 5-30초)
+3. 배경 소음이 너무 많을 수 있습니다
+
+해결 방법:
+- 단일 악기나 목소리만 있는 오디오 파일을 사용해보세요
+- 더 명확한 멜로디가 있는 오디오 파일을 시도해보세요
+- 다른 오디오 파일을 업로드해보세요
+
+참고: 현재 librosa를 사용하여 오디오를 처리하고 있습니다."""
+                
                 raise HTTPException(
                     status_code=500, 
-                    detail="악보 생성에 실패했습니다. 오디오 파일에서 음표를 추출할 수 없습니다. 다른 오디오 파일을 시도하거나, basic-pitch를 설치해주세요: pip install basic-pitch"
+                    detail=error_msg
                 )
         finally:
             # 임시 파일 삭제
