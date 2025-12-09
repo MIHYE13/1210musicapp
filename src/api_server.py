@@ -14,6 +14,15 @@ import tempfile
 import json
 import asyncio
 
+# Windows 콘솔 인코딩 설정 (이모지 출력 오류 방지)
+if sys.platform == 'win32':
+    import io
+    try:
+        sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
+        sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
+    except:
+        pass
+
 # Add src directory to path
 sys.path.append(str(Path(__file__).parent))
 
@@ -25,16 +34,16 @@ try:
     env_path = project_root / '.env'
     if env_path.exists():
         load_dotenv(env_path)
-        print(f"✅ .env 파일을 로드했습니다: {env_path}")
+        print(f"[OK] .env 파일을 로드했습니다: {env_path}")
     else:
-        print(f"⚠️  .env 파일을 찾을 수 없습니다: {env_path}")
+        print(f"[WARN] .env 파일을 찾을 수 없습니다: {env_path}")
         print("   프로젝트 루트에 .env 파일을 생성하고 API 키를 설정하세요.")
         # Try loading from current directory as fallback
         load_dotenv()
 except ImportError:
-    print("⚠️  python-dotenv가 설치되지 않았습니다. 환경 변수만 사용합니다.")
+    print("[WARN] python-dotenv가 설치되지 않았습니다. 환경 변수만 사용합니다.")
 except Exception as e:
-    print(f"⚠️  .env 파일 로드 중 오류: {str(e)}")
+    print(f"[WARN] .env 파일 로드 중 오류: {str(e)}")
 
 # Optional imports with error handling
 try:
