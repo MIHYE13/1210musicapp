@@ -31,7 +31,17 @@ if __name__ == "__main__":
     print()
     
     try:
-        from src.api_server import app
+        # Import directly from api_server module, avoiding src package __init__
+        import sys
+        from pathlib import Path
+        api_server_path = Path(__file__).parent / 'src' / 'api_server.py'
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("api_server", api_server_path)
+        api_server = importlib.util.module_from_spec(spec)
+        sys.modules["api_server"] = api_server
+        spec.loader.exec_module(api_server)
+        app = api_server.app
+        
         import uvicorn
         
         uvicorn.run(

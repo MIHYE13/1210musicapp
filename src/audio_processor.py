@@ -215,8 +215,12 @@ class AudioProcessor:
             return img_bytes
             
         except Exception as e:
-            st.warning(f"악보 렌더링 실패: {str(e)}")
-            st.info("MuseScore가 설치되어 있는지 확인해주세요.")
+            if HAS_STREAMLIT and st:
+                st.warning(f"악보 렌더링 실패: {str(e)}")
+                st.info("MuseScore가 설치되어 있는지 확인해주세요.")
+            else:
+                print(f"악보 렌더링 실패: {str(e)}")
+                print("MuseScore가 설치되어 있는지 확인해주세요.")
             return None
     
     def load_audio(self, audio_file) -> tuple[np.ndarray, int]:

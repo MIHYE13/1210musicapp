@@ -3,7 +3,12 @@ PDF Score Parser
 Parse PDF music scores and convert to MusicXML
 """
 
-import streamlit as st
+try:
+    import streamlit as st
+    HAS_STREAMLIT = True
+except ImportError:
+    HAS_STREAMLIT = False
+    st = None
 from typing import Optional
 from pathlib import Path
 import subprocess

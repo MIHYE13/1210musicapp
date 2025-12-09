@@ -3,7 +3,13 @@ YouTube Audio Downloader
 Download audio from YouTube for music analysis
 """
 
-import streamlit as st
+try:
+    import streamlit as st
+    HAS_STREAMLIT = True
+except ImportError:
+    HAS_STREAMLIT = False
+    st = None
+
 from typing import Optional, Dict
 import re
 import requests

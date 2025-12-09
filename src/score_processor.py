@@ -73,10 +73,9 @@ class ScoreProcessor:
             return score
             
         except Exception as e:
-            try:
-                import st
+            if HAS_STREAMLIT and st:
                 st.error(f"악보 로딩 오류: {str(e)}")
-            except:
+            else:
                 print(f"악보 로딩 오류: {str(e)}")
             return None
     
@@ -96,10 +95,9 @@ class ScoreProcessor:
             return score
             
         except Exception as e:
-            try:
-                import st
+            if HAS_STREAMLIT and st:
                 st.error(f"악보 로딩 오류: {str(e)}")
-            except:
+            else:
                 print(f"악보 로딩 오류: {str(e)}")
             return None
     
