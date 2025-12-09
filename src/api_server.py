@@ -303,33 +303,60 @@ async def process_audio(file: UploadFile = File(...)):
             if not HAS_AUDIO_PROCESSOR or not audio_processor:
                 raise HTTPException(status_code=503, detail="Audio Processor 모듈을 사용할 수 없습니다.")
             
-            # 오디오 처리
+            # 오디오 처리 (비동기로 실행하여 타임아웃 방지)
+            import asyncio
+            import concurrent.futures
+            
             try:
-                score = audio_processor.process_audio_from_path(tmp_path)
+                # 별도 스레드에서 오디오 처리 실행 (블로킹 방지)
+                loop = asyncio.get_event_loop()
+                with concurrent.futures.ThreadPoolExecutor() as executor:
+                    # 최대 120초 타임아웃
+                    future = loop.run_in_executor(
+                        executor,
+                        audio_processor.process_audio_from_path,
+                        tmp_path
+                    )
+                    score = await asyncio.wait_for(future, timeout=120.0)
+                    
+            except asyncio.TimeoutError:
+                raise HTTPException(
+                    status_code=504,
+                    detail="오디오 처리 시간이 초과되었습니다. 파일이 너무 크거나 복잡할 수 있습니다. 더 짧은 오디오 파일을 시도해주세요."
+                )
             except Exception as e:
                 import traceback
                 error_detail = f"오디오 처리 중 오류 발생: {str(e)}"
                 print(f"[ERROR] {error_detail}")
                 print(traceback.format_exc())
-                raise HTTPException(
-                    status_code=500, 
-                    detail=f"악보 생성에 실패했습니다. {error_detail}. basic-pitch가 설치되어 있는지 확인해주세요."
-                )
+                
+                # 더 명확한 에러 메시지 제공
+                if "basic-pitch" in str(e).lower() or "basic_pitch" in str(e).lower():
+                    error_msg = f"악보 생성에 실패했습니다. basic-pitch 라이브러리가 필요합니다. 설치 방법: pip install basic-pitch"
+                elif "librosa" in str(e).lower():
+                    error_msg = f"악보 생성에 실패했습니다. librosa 라이브러리가 필요합니다. 설치 방법: pip install librosa"
+                else:
+                    error_msg = f"악보 생성에 실패했습니다: {error_detail}. 오디오 파일 형식을 확인하거나 다른 파일을 시도해주세요."
+                
+                raise HTTPException(status_code=500, detail=error_msg)
             
-            if score:
+            if score and len(score.flat.notes) > 0:
                 score_id = f"score_{len(score_storage)}"
                 score_storage[score_id] = score
                 
-                return {
-                    "success": True,
-                    "scoreId": score_id,
-                    "message": "악보가 생성되었습니다.",
-                    "note": "실제 악보 렌더링은 클라이언트에서 처리됩니다."
-                }
+                return JSONResponse(
+                    status_code=200,
+                    content={
+                        "success": True,
+                        "scoreId": score_id,
+                        "message": "악보가 생성되었습니다.",
+                        "note": f"총 {len(score.flat.notes)}개의 음표가 추출되었습니다."
+                    }
+                )
             else:
                 raise HTTPException(
                     status_code=500, 
-                    detail="악보 생성에 실패했습니다. 오디오 파일을 확인해주세요. basic-pitch가 설치되어 있는지 확인하세요: pip install basic-pitch"
+                    detail="악보 생성에 실패했습니다. 오디오 파일에서 음표를 추출할 수 없습니다. 다른 오디오 파일을 시도하거나, basic-pitch를 설치해주세요: pip install basic-pitch"
                 )
         finally:
             # 임시 파일 삭제

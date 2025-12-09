@@ -15,7 +15,7 @@ class ApiClient {
   private baseUrl: string
   private timeout: number
 
-  constructor(baseUrl: string = API_BASE_URL, timeout: number = 30000) {
+  constructor(baseUrl: string = API_BASE_URL, timeout: number = 150000) {  // 오디오 처리 시간을 고려하여 150초로 증가
     this.baseUrl = baseUrl
     this.timeout = timeout
   }
