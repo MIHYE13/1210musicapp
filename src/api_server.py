@@ -226,6 +226,9 @@ async def process_audio(file: UploadFile = File(...)):
         try:
             # MIDI 파일인 경우 직접 악보로 변환
             if file_ext in ['mid', 'midi']:
+                if not HAS_SCORE_PROCESSOR or not score_processor:
+                    raise HTTPException(status_code=503, detail="Score Processor 모듈을 사용할 수 없습니다.")
+                
                 from music21 import converter
                 score = converter.parse(tmp_path)
                 score = score_processor.transpose_to_c_major(score)
@@ -244,6 +247,10 @@ async def process_audio(file: UploadFile = File(...)):
             if file_ext not in ['mp3', 'wav', 'mpeg']:
                 raise HTTPException(status_code=400, detail="지원하지 않는 파일 형식입니다. MP3, WAV, 또는 MIDI 파일을 업로드하세요.")
             
+            # 오디오 처리 모듈 확인
+            if not HAS_AUDIO_PROCESSOR or not audio_processor:
+                raise HTTPException(status_code=503, detail="Audio Processor 모듈을 사용할 수 없습니다.")
+            
             # 오디오 처리
             score = audio_processor.process_audio_from_path(tmp_path)
             
@@ -258,16 +265,23 @@ async def process_audio(file: UploadFile = File(...)):
                     "note": "실제 악보 렌더링은 클라이언트에서 처리됩니다."
                 }
             else:
-                raise HTTPException(status_code=500, detail="악보 생성에 실패했습니다.")
+                raise HTTPException(status_code=500, detail="악보 생성에 실패했습니다. 오디오 파일을 확인해주세요.")
         finally:
             # 임시 파일 삭제
             if os.path.exists(tmp_path):
-                os.unlink(tmp_path)
+                try:
+                    os.unlink(tmp_path)
+                except:
+                    pass
             
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"오디오 처리 오류: {str(e)}")
+        import traceback
+        error_detail = f"오디오 처리 오류: {str(e)}"
+        print(f"[ERROR] {error_detail}")
+        print(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=error_detail)
 
 # ==================== Score Processing ====================
 
@@ -304,11 +318,15 @@ async def process_score(
             tmp_path = tmp_file.name
         
         try:
+            # Score Processor 모듈 확인
+            if not HAS_SCORE_PROCESSOR or not score_processor:
+                raise HTTPException(status_code=503, detail="Score Processor 모듈을 사용할 수 없습니다.")
+            
             # 악보 로드
             score = score_processor.load_score_from_path(tmp_path)
             
             if not score:
-                raise HTTPException(status_code=400, detail="악보를 불러올 수 없습니다.")
+                raise HTTPException(status_code=400, detail="악보를 불러올 수 없습니다. 파일 형식을 확인해주세요.")
             
             # 처리 옵션 적용
             if simplifyRhythm:
@@ -321,7 +339,10 @@ async def process_score(
                 score = score_processor.add_solfege(score)
             
             if addChords:
-                score = chord_generator.add_accompaniment(score)
+                if not HAS_CHORD_GENERATOR or not chord_generator:
+                    print("[WARN] Chord Generator를 사용할 수 없어 화음 추가를 건너뜁니다.")
+                else:
+                    score = chord_generator.add_accompaniment(score)
             
             # 저장
             score_id = f"processed_{len(score_storage)}"
@@ -341,18 +362,28 @@ async def process_score(
         finally:
             # 임시 파일 삭제
             if os.path.exists(tmp_path):
-                os.unlink(tmp_path)
+                try:
+                    os.unlink(tmp_path)
+                except:
+                    pass
         
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"악보 처리 오류: {str(e)}")
+        import traceback
+        error_detail = f"악보 처리 오류: {str(e)}"
+        print(f"[ERROR] {error_detail}")
+        print(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=error_detail)
 
 @app.get("/api/score/{score_id}/export/midi")
 async def export_midi(score_id: str):
     """MIDI 파일을 MP3로 변환하여 내보내기"""
     if score_id not in score_storage:
         raise HTTPException(status_code=404, detail="악보를 찾을 수 없습니다.")
+    
+    if not HAS_SCORE_PROCESSOR or not score_processor:
+        raise HTTPException(status_code=503, detail="Score Processor 모듈을 사용할 수 없습니다.")
     
     try:
         score = score_storage[score_id]
@@ -610,6 +641,9 @@ async def export_mp3(score_id: str):
     if score_id not in score_storage:
         raise HTTPException(status_code=404, detail="악보를 찾을 수 없습니다.")
     
+    if not HAS_SCORE_PROCESSOR or not score_processor:
+        raise HTTPException(status_code=503, detail="Score Processor 모듈을 사용할 수 없습니다.")
+    
     try:
         score = score_storage[score_id]
         midi_bytes = score_processor.export_midi(score)
@@ -645,6 +679,9 @@ async def export_musicxml(score_id: str):
     """MusicXML 파일로 내보내기"""
     if score_id not in score_storage:
         raise HTTPException(status_code=404, detail="악보를 찾을 수 없습니다.")
+    
+    if not HAS_SCORE_PROCESSOR or not score_processor:
+        raise HTTPException(status_code=503, detail="Score Processor 모듈을 사용할 수 없습니다.")
     
     try:
         score = score_storage[score_id]
@@ -924,6 +961,10 @@ async def analyze_chord(
         try:
             score = None
             
+            # 모듈 확인
+            if not HAS_SCORE_PROCESSOR or not score_processor:
+                raise HTTPException(status_code=503, detail="Score Processor 모듈을 사용할 수 없습니다.")
+            
             # 파일 타입에 따라 처리
             if fileType == "midi" or file_ext in ['mid', 'midi']:
                 # MIDI 파일 직접 처리
@@ -933,6 +974,9 @@ async def analyze_chord(
                 
             elif fileType == "audio" or file_ext in ['mp3', 'wav', 'mpeg']:
                 # 오디오 파일을 MIDI로 변환 후 처리
+                if not HAS_AUDIO_PROCESSOR or not audio_processor:
+                    raise HTTPException(status_code=503, detail="Audio Processor 모듈을 사용할 수 없습니다.")
+                
                 score = audio_processor.process_audio_from_path(tmp_path)
                 if score:
                     score = score_processor.transpose_to_c_major(score)
@@ -957,6 +1001,9 @@ async def analyze_chord(
             
             if score:
                 # 화음 분석
+                if not HAS_CHORD_ANALYZER or not chord_analyzer:
+                    raise HTTPException(status_code=503, detail="Chord Analyzer 모듈을 사용할 수 없습니다.")
+                
                 chords_info = chord_analyzer.analyze_midi_chords(score)
                 
                 if chords_info:
@@ -1055,6 +1102,16 @@ async def analyze_chord_youtube(request: dict):
         
         if not actual_audio_path:
             raise HTTPException(status_code=500, detail="다운로드된 오디오 파일을 찾을 수 없습니다.")
+        
+        # 모듈 확인
+        if not HAS_AUDIO_PROCESSOR or not audio_processor:
+            raise HTTPException(status_code=503, detail="Audio Processor 모듈을 사용할 수 없습니다.")
+        
+        if not HAS_SCORE_PROCESSOR or not score_processor:
+            raise HTTPException(status_code=503, detail="Score Processor 모듈을 사용할 수 없습니다.")
+        
+        if not HAS_CHORD_ANALYZER or not chord_analyzer:
+            raise HTTPException(status_code=503, detail="Chord Analyzer 모듈을 사용할 수 없습니다.")
         
         # 오디오를 MIDI로 변환
         score = audio_processor.process_audio_from_path(actual_audio_path)
