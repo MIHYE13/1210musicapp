@@ -119,15 +119,18 @@ app.add_middleware(
     allow_origins=[
         "http://localhost:3000",
         "http://localhost:5173",
+        "http://localhost:5176",  # Vite 개발 서버 다른 포트
         "http://127.0.0.1:3000",
         "http://127.0.0.1:5173",
+        "http://127.0.0.1:5176",
         "http://localhost:3001",
         "*",  # 개발 환경에서 모든 origin 허용
     ],
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH", "HEAD"],
     allow_headers=["*"],
     expose_headers=["*"],
+    max_age=3600,  # preflight 캐시 시간
 )
 
 # 전역 예외 핸들러 추가
