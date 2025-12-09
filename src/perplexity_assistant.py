@@ -116,24 +116,58 @@ class PerplexityAssistant:
             
             if response.status_code == 200:
                 result = response.json()
-                content = result['choices'][0]['message']['content']
                 
-                # Extract sources if available
-                citations = result.get('citations', [])
-                if citations:
-                    content += "\n\n**참고 자료:**\n"
-                    for i, citation in enumerate(citations[:3], 1):
-                        content += f"{i}. {citation}\n"
-                
-                return content
+                # 응답 구조 확인
+                if 'choices' in result and len(result['choices']) > 0:
+                    content = result['choices'][0]['message']['content']
+                    
+                    # Extract sources if available
+                    citations = result.get('citations', [])
+                    if citations:
+                        content += "\n\n**참고 자료:**\n"
+                        for i, citation in enumerate(citations[:3], 1):
+                            content += f"{i}. {citation}\n"
+                    
+                    return content
+                else:
+                    # 응답 구조가 예상과 다른 경우
+                    error_msg = f"Perplexity API 응답 형식 오류: {result}"
+                    print(f"[WARN] {error_msg}")
+                    return self._fallback_theory_search(topic)
             else:
+                # HTTP 오류 응답 처리
+                error_text = response.text
+                try:
+                    error_json = response.json()
+                    error_msg = error_json.get('error', {}).get('message', error_text)
+                except:
+                    error_msg = error_text
+                
+                print(f"[ERROR] Perplexity API 오류 (HTTP {response.status_code}): {error_msg}")
                 return self._fallback_theory_search(topic)
                 
-        except Exception as e:
+        except requests.exceptions.Timeout:
+            error_msg = "Perplexity API 요청 시간이 초과되었습니다. 네트워크 연결을 확인하세요."
             if HAS_STREAMLIT and st:
-                st.warning(f"Perplexity 검색 오류: {str(e)}")
+                st.warning(error_msg)
             else:
-                print(f"Perplexity 검색 오류: {str(e)}")
+                print(f"[ERROR] {error_msg}")
+            return self._fallback_theory_search(topic)
+        except requests.exceptions.RequestException as e:
+            error_msg = f"Perplexity API 네트워크 오류: {str(e)}"
+            if HAS_STREAMLIT and st:
+                st.warning(error_msg)
+            else:
+                print(f"[ERROR] {error_msg}")
+            return self._fallback_theory_search(topic)
+        except Exception as e:
+            error_msg = f"Perplexity 검색 오류: {str(e)}"
+            if HAS_STREAMLIT and st:
+                st.warning(error_msg)
+            else:
+                print(f"[ERROR] {error_msg}")
+            import traceback
+            print(traceback.format_exc())
             return self._fallback_theory_search(topic)
     
     def research_song_background(self, song_title: str) -> str:
@@ -180,11 +214,31 @@ class PerplexityAssistant:
             
             if response.status_code == 200:
                 result = response.json()
-                return result['choices'][0]['message']['content']
+                if 'choices' in result and len(result['choices']) > 0:
+                    return result['choices'][0]['message']['content']
+                else:
+                    print(f"[WARN] Perplexity API 응답 형식 오류: {result}")
+                    return self._fallback_song_background(song_title)
             else:
+                error_text = response.text
+                try:
+                    error_json = response.json()
+                    error_msg = error_json.get('error', {}).get('message', error_text)
+                except:
+                    error_msg = error_text
+                print(f"[ERROR] Perplexity API 오류 (HTTP {response.status_code}): {error_msg}")
                 return self._fallback_song_background(song_title)
                 
+        except requests.exceptions.Timeout:
+            print("[ERROR] Perplexity API 요청 시간 초과")
+            return self._fallback_song_background(song_title)
+        except requests.exceptions.RequestException as e:
+            print(f"[ERROR] Perplexity API 네트워크 오류: {str(e)}")
+            return self._fallback_song_background(song_title)
         except Exception as e:
+            print(f"[ERROR] Perplexity 검색 오류: {str(e)}")
+            import traceback
+            print(traceback.format_exc())
             return self._fallback_song_background(song_title)
     
     def find_teaching_resources(self, topic: str, grade_level: str) -> str:
@@ -232,20 +286,40 @@ class PerplexityAssistant:
             
             if response.status_code == 200:
                 result = response.json()
-                content = result['choices'][0]['message']['content']
-                
-                # Add citations
-                citations = result.get('citations', [])
-                if citations:
-                    content += "\n\n**추천 링크:**\n"
-                    for i, citation in enumerate(citations[:5], 1):
-                        content += f"{i}. {citation}\n"
-                
-                return content
+                if 'choices' in result and len(result['choices']) > 0:
+                    content = result['choices'][0]['message']['content']
+                    
+                    # Add citations
+                    citations = result.get('citations', [])
+                    if citations:
+                        content += "\n\n**추천 링크:**\n"
+                        for i, citation in enumerate(citations[:5], 1):
+                            content += f"{i}. {citation}\n"
+                    
+                    return content
+                else:
+                    print(f"[WARN] Perplexity API 응답 형식 오류: {result}")
+                    return self._fallback_teaching_resources(topic, grade_level)
             else:
+                error_text = response.text
+                try:
+                    error_json = response.json()
+                    error_msg = error_json.get('error', {}).get('message', error_text)
+                except:
+                    error_msg = error_text
+                print(f"[ERROR] Perplexity API 오류 (HTTP {response.status_code}): {error_msg}")
                 return self._fallback_teaching_resources(topic, grade_level)
                 
+        except requests.exceptions.Timeout:
+            print("[ERROR] Perplexity API 요청 시간 초과")
+            return self._fallback_teaching_resources(topic, grade_level)
+        except requests.exceptions.RequestException as e:
+            print(f"[ERROR] Perplexity API 네트워크 오류: {str(e)}")
+            return self._fallback_teaching_resources(topic, grade_level)
         except Exception as e:
+            print(f"[ERROR] Perplexity 검색 오류: {str(e)}")
+            import traceback
+            print(traceback.format_exc())
             return self._fallback_teaching_resources(topic, grade_level)
     
     def get_latest_education_trends(self, area: str = "초등 음악 교육") -> str:
@@ -292,11 +366,29 @@ class PerplexityAssistant:
             
             if response.status_code == 200:
                 result = response.json()
-                return result['choices'][0]['message']['content']
+                if 'choices' in result and len(result['choices']) > 0:
+                    return result['choices'][0]['message']['content']
+                else:
+                    print(f"[WARN] Perplexity API 응답 형식 오류: {result}")
+                    return "최신 트렌드 정보를 가져오는데 실패했습니다."
             else:
-                return "최신 트렌드 정보를 가져오는데 실패했습니다."
+                error_text = response.text
+                try:
+                    error_json = response.json()
+                    error_msg = error_json.get('error', {}).get('message', error_text)
+                except:
+                    error_msg = error_text
+                print(f"[ERROR] Perplexity API 오류 (HTTP {response.status_code}): {error_msg}")
+                return f"최신 트렌드 정보를 가져오는데 실패했습니다: {error_msg}"
                 
+        except requests.exceptions.Timeout:
+            return "요청 시간이 초과되었습니다. 네트워크 연결을 확인하세요."
+        except requests.exceptions.RequestException as e:
+            return f"네트워크 오류가 발생했습니다: {str(e)}"
         except Exception as e:
+            print(f"[ERROR] Perplexity 검색 오류: {str(e)}")
+            import traceback
+            print(traceback.format_exc())
             return f"오류가 발생했습니다: {str(e)}"
     
     def compare_teaching_methods(self, method1: str, method2: str) -> str:
@@ -345,11 +437,29 @@ class PerplexityAssistant:
             
             if response.status_code == 200:
                 result = response.json()
-                return result['choices'][0]['message']['content']
+                if 'choices' in result and len(result['choices']) > 0:
+                    return result['choices'][0]['message']['content']
+                else:
+                    print(f"[WARN] Perplexity API 응답 형식 오류: {result}")
+                    return "교수법 비교 정보를 가져오는데 실패했습니다."
             else:
-                return "교수법 비교 정보를 가져오는데 실패했습니다."
+                error_text = response.text
+                try:
+                    error_json = response.json()
+                    error_msg = error_json.get('error', {}).get('message', error_text)
+                except:
+                    error_msg = error_text
+                print(f"[ERROR] Perplexity API 오류 (HTTP {response.status_code}): {error_msg}")
+                return f"교수법 비교 정보를 가져오는데 실패했습니다: {error_msg}"
                 
+        except requests.exceptions.Timeout:
+            return "요청 시간이 초과되었습니다. 네트워크 연결을 확인하세요."
+        except requests.exceptions.RequestException as e:
+            return f"네트워크 오류가 발생했습니다: {str(e)}"
         except Exception as e:
+            print(f"[ERROR] Perplexity 검색 오류: {str(e)}")
+            import traceback
+            print(traceback.format_exc())
             return f"오류가 발생했습니다: {str(e)}"
     
     # Fallback methods

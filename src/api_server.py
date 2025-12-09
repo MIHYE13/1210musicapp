@@ -1008,41 +1008,105 @@ async def generate_lesson_plan(request: dict):
 
 @app.post("/api/perplexity/search")
 async def perplexity_search(request: dict):
-    """Perplexity 검색"""
+    """Perplexity 검색 - 즉시 응답 제공"""
     query = request.get("query")
     search_type = request.get("searchType", "음악 이론 조사")
     
     if not query:
-        raise HTTPException(status_code=400, detail="검색어를 입력해주세요.")
+        return JSONResponse(
+            status_code=400,
+            content={
+                "success": False,
+                "error": "검색어를 입력해주세요."
+            }
+        )
     
     try:
-        # 검색 유형에 따라 다른 메서드 호출
-        if search_type == "음악 이론 조사":
-            result = perplexity_assistant.search_music_theory(query)
-        elif search_type == "곡 배경 정보":
-            result = perplexity_assistant.research_song_background(query)
-        elif search_type == "교육 자료 찾기":
-            result = perplexity_assistant.find_teaching_resources(query, "3-4학년")
-        elif search_type == "최신 트렌드":
-            if hasattr(perplexity_assistant, 'get_latest_education_trends'):
-                result = perplexity_assistant.get_latest_education_trends(query)
-            else:
-                result = perplexity_assistant.search_music_theory(f"{query} 최신 트렌드")
-        elif search_type == "교수법 비교":
-            if hasattr(perplexity_assistant, 'compare_teaching_methods'):
-                # 두 개의 교수법이 필요하므로 기본 검색 사용
-                result = perplexity_assistant.search_music_theory(f"{query} 교수법 비교")
-            else:
-                result = perplexity_assistant.search_music_theory(f"{query} 교수법 비교")
-        else:
-            result = perplexity_assistant.search_music_theory(query)
+        # Perplexity Assistant 모듈 확인
+        if not HAS_PERPLEXITY_ASSISTANT or not perplexity_assistant:
+            return JSONResponse(
+                status_code=503,
+                content={
+                    "success": False,
+                    "error": "Perplexity Assistant 모듈을 사용할 수 없습니다.",
+                    "result": "Perplexity 모듈이 로드되지 않았습니다. 필요한 패키지가 설치되어 있는지 확인하세요."
+                }
+            )
         
-        return {
-            "success": True,
-            "result": result
-        }
+        # API 키 확인
+        if not perplexity_assistant.api_key:
+            return JSONResponse(
+                status_code=503,
+                content={
+                    "success": False,
+                    "error": "Perplexity API 키가 설정되지 않았습니다.",
+                    "result": "Perplexity API 키를 .env 파일에 PERPLEXITY_API_KEY로 설정하세요. https://www.perplexity.ai/settings/api 에서 발급받을 수 있습니다."
+                }
+            )
+        
+        # 검색 유형에 따라 다른 메서드 호출
+        try:
+            if search_type == "음악 이론 조사":
+                result = perplexity_assistant.search_music_theory(query)
+            elif search_type == "곡 배경 정보":
+                result = perplexity_assistant.research_song_background(query)
+            elif search_type == "교육 자료 찾기":
+                result = perplexity_assistant.find_teaching_resources(query, "3-4학년")
+            elif search_type == "최신 트렌드":
+                if hasattr(perplexity_assistant, 'get_latest_education_trends'):
+                    result = perplexity_assistant.get_latest_education_trends(query)
+                else:
+                    result = perplexity_assistant.search_music_theory(f"{query} 최신 트렌드")
+            elif search_type == "교수법 비교":
+                if hasattr(perplexity_assistant, 'compare_teaching_methods'):
+                    # 두 개의 교수법이 필요하므로 기본 검색 사용
+                    result = perplexity_assistant.search_music_theory(f"{query} 교수법 비교")
+                else:
+                    result = perplexity_assistant.search_music_theory(f"{query} 교수법 비교")
+            else:
+                result = perplexity_assistant.search_music_theory(query)
+            
+            # 결과가 None이거나 빈 문자열인 경우 처리
+            if not result:
+                result = "검색 결과를 가져오지 못했습니다. API 키와 네트워크 연결을 확인하세요."
+            
+            return JSONResponse(
+                status_code=200,
+                content={
+                    "success": True,
+                    "result": result
+                }
+            )
+        except Exception as search_error:
+            # Perplexity API 호출 중 오류
+            import traceback
+            error_detail = str(search_error)
+            print(f"[ERROR] Perplexity 검색 실행 오류: {error_detail}")
+            print(traceback.format_exc())
+            
+            return JSONResponse(
+                status_code=500,
+                content={
+                    "success": False,
+                    "error": f"Perplexity 검색 실행 오류: {error_detail}",
+                    "result": f"검색 중 오류가 발생했습니다: {error_detail}. API 키와 네트워크 연결을 확인하세요."
+                }
+            )
+            
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Perplexity 검색 오류: {str(e)}")
+        import traceback
+        error_detail = str(e)
+        print(f"[ERROR] Perplexity 검색 오류: {error_detail}")
+        print(traceback.format_exc())
+        
+        return JSONResponse(
+            status_code=500,
+            content={
+                "success": False,
+                "error": f"Perplexity 검색 오류: {error_detail}",
+                "result": f"검색 중 오류가 발생했습니다: {error_detail}"
+            }
+        )
 
 # ==================== YouTube ====================
 
