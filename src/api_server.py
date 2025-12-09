@@ -39,7 +39,13 @@ if sys.platform == 'win32':
         pass
 
 # Add src directory to path
-sys.path.append(str(Path(__file__).parent))
+src_dir = Path(__file__).parent
+if str(src_dir) not in sys.path:
+    sys.path.insert(0, str(src_dir))
+# Also add project root to path
+project_root = src_dir.parent
+if str(project_root) not in sys.path:
+    sys.path.insert(0, str(project_root))
 
 # Load environment variables from .env file in project root
 try:
