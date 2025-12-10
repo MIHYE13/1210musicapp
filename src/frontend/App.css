@@ -111,7 +111,7 @@
 }
 
 .feature-card {
-  background: var(--bg-primary);
+  background: var(--bg-secondary);
   padding: 2.5rem;
   border-radius: var(--border-radius-lg);
   box-shadow: var(--shadow-md);
@@ -180,6 +180,22 @@
   line-height: 1.7;
   margin: 0;
   font-size: 1rem;
+}
+
+.feature-card.main-feature {
+  grid-column: 1 / -1;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border: none;
+}
+
+.feature-card.main-feature h3,
+.feature-card.main-feature p {
+  color: white;
+}
+
+.feature-card.main-feature .icon-wrapper {
+  background: rgba(255, 255, 255, 0.2);
 }
 
 /* Responsive Design */

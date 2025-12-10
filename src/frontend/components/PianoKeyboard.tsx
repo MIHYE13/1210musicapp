@@ -6,13 +6,15 @@ interface PianoKeyboardProps {
   chordName?: string
   interactive?: boolean
   octaves?: number[]
+  onKeyClick?: (note: string) => void
 }
 
 const PianoKeyboard = ({ 
   chordNotes = [], 
   chordName = '',
   interactive = true,
-  octaves = [4, 5]
+  octaves = [4, 5],
+  onKeyClick
 }: PianoKeyboardProps) => {
   const [pressedKeys, setPressedKeys] = useState<Set<string>>(new Set())
   const audioContextRef = useRef<AudioContext | null>(null)
@@ -28,8 +30,11 @@ const PianoKeyboard = ({
     }
   }, [interactive])
 
-  // 음표 주파수 매핑 (A4 = 440Hz)
+  // 음표 주파수 매핑 (A4 = 440Hz) - 더 많은 옥타브 지원
   const noteFrequencies: Record<string, number> = {
+    'C3': 130.81, 'C#3': 138.59, 'D3': 146.83, 'D#3': 155.56,
+    'E3': 164.81, 'F3': 174.61, 'F#3': 185.00, 'G3': 196.00,
+    'G#3': 207.65, 'A3': 220.00, 'A#3': 233.08, 'B3': 246.94,
     'C4': 261.63, 'C#4': 277.18, 'D4': 293.66, 'D#4': 311.13,
     'E4': 329.63, 'F4': 349.23, 'F#4': 369.99, 'G4': 392.00,
     'G#4': 415.30, 'A4': 440.00, 'A#4': 466.16, 'B4': 493.88,
@@ -130,7 +135,14 @@ const PianoKeyboard = ({
             strokeWidth="2"
             className={`piano-key white-key ${interactive ? 'interactive' : ''}`}
             data-note={noteFull}
-            onClick={() => interactive && playNote(noteFull)}
+            onClick={() => {
+              if (interactive) {
+                playNote(noteFull)
+                if (onKeyClick) {
+                  onKeyClick(noteFull)
+                }
+              }
+            }}
             style={{ cursor: interactive ? 'pointer' : 'default' }}
           />
           <text
@@ -171,7 +183,14 @@ const PianoKeyboard = ({
             strokeWidth="1"
             className={`piano-key black-key ${interactive ? 'interactive' : ''}`}
             data-note={blackNote}
-            onClick={() => interactive && playNote(blackNote)}
+            onClick={() => {
+              if (interactive) {
+                playNote(blackNote)
+                if (onKeyClick) {
+                  onKeyClick(blackNote)
+                }
+              }
+            }}
             style={{ cursor: interactive ? 'pointer' : 'default' }}
           />
         )

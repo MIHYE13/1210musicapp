@@ -1,0 +1,346 @@
+.rhythm-composer {
+  padding: 2.5rem 2rem;
+  max-width: 1600px;
+  margin: 0 auto;
+  animation: fadeIn 0.5s ease-out;
+}
+
+.rhythm-composer h2 {
+  background: var(--primary-gradient);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  margin-bottom: 1rem;
+  font-size: 2.2rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  text-align: center;
+}
+
+.rhythm-composer .subtitle {
+  text-align: center;
+  color: var(--text-secondary);
+  margin-bottom: 2rem;
+  font-size: 1.1rem;
+}
+
+.composer-controls {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1rem;
+  margin-bottom: 2rem;
+  padding: 1.5rem;
+  background: var(--bg-secondary);
+  border-radius: var(--border-radius-lg);
+  box-shadow: var(--shadow-md);
+}
+
+.control-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.control-group label {
+  font-weight: 600;
+  color: var(--text-primary);
+  font-size: 0.9rem;
+}
+
+.form-control {
+  padding: 0.75rem;
+  border: 2px solid var(--border-color);
+  border-radius: var(--border-radius-md);
+  font-size: 1rem;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  transition: border-color var(--transition-normal);
+}
+
+.form-control:focus {
+  outline: none;
+  border-color: var(--primary-color);
+}
+
+.speed-slider {
+  width: 100%;
+  margin: 0.5rem 0;
+}
+
+.speed-value {
+  text-align: center;
+  font-weight: 600;
+  color: var(--primary-color);
+}
+
+.play-button,
+.reset-button {
+  padding: 0.75rem 1.5rem;
+  border: none;
+  border-radius: var(--border-radius-md);
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition-normal);
+}
+
+.play-button {
+  background: var(--primary-gradient);
+  color: white;
+  box-shadow: var(--shadow-sm);
+}
+
+.play-button:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+}
+
+.play-button.playing {
+  background: #f87171;
+}
+
+.play-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.reset-button {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  border: 2px solid var(--border-color);
+}
+
+.reset-button:hover {
+  background: var(--bg-secondary);
+  border-color: var(--primary-color);
+}
+
+.composer-main {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2rem;
+  margin-bottom: 2rem;
+}
+
+.piano-section,
+.score-section {
+  background: var(--bg-secondary);
+  padding: 2rem;
+  border-radius: var(--border-radius-lg);
+  box-shadow: var(--shadow-md);
+}
+
+.piano-section h3,
+.score-section h3 {
+  margin-top: 0;
+  margin-bottom: 1.5rem;
+  color: var(--text-primary);
+}
+
+.current-measure-info {
+  background: var(--bg-primary);
+  padding: 1rem;
+  border-radius: var(--border-radius-md);
+  margin-bottom: 1rem;
+}
+
+.current-measure-info p {
+  margin: 0.5rem 0;
+  color: var(--text-primary);
+}
+
+.current-measure-info strong {
+  color: var(--primary-color);
+}
+
+.score-display {
+  background: white;
+  padding: 2rem;
+  border-radius: var(--border-radius-md);
+  min-height: 300px;
+  position: relative;
+}
+
+.score-header {
+  display: flex;
+  gap: 2rem;
+  margin-bottom: 2rem;
+  font-weight: 600;
+  font-size: 1.2rem;
+}
+
+.time-signature,
+.key-signature {
+  padding: 0.5rem 1rem;
+  background: var(--bg-secondary);
+  border-radius: var(--border-radius-md);
+}
+
+.measure-container {
+  margin-bottom: 3rem;
+  border: 2px solid var(--border-color);
+  border-radius: var(--border-radius-md);
+  padding: 1rem;
+  background: var(--bg-primary);
+}
+
+.measure-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.measure-number {
+  font-weight: 600;
+  color: var(--primary-color);
+}
+
+.chord-label {
+  background: var(--primary-gradient);
+  color: white;
+  padding: 0.25rem 0.75rem;
+  border-radius: var(--border-radius-md);
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.delete-measure-btn {
+  background: #f87171;
+  color: white;
+  border: none;
+  border-radius: 50%;
+  width: 24px;
+  height: 24px;
+  cursor: pointer;
+  font-size: 0.8rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--transition-normal);
+}
+
+.delete-measure-btn:hover {
+  background: #ef4444;
+  transform: scale(1.1);
+}
+
+.measure-content {
+  position: relative;
+}
+
+.staff-container {
+  position: relative;
+  min-height: 200px;
+  margin-bottom: 1rem;
+  overflow-x: auto;
+}
+
+.staff {
+  position: relative;
+  height: 150px;
+  width: 100%;
+  min-width: 400px;
+}
+
+.staff-line {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: #333;
+}
+
+.note-element {
+  position: absolute;
+  height: 20px;
+  cursor: pointer;
+  z-index: 10;
+}
+
+.note-head {
+  width: 16px;
+  height: 16px;
+  background: #000;
+  border-radius: 50%;
+  position: absolute;
+  left: 0;
+  top: 2px;
+  border: 1px solid #333;
+}
+
+.note-stem {
+  position: absolute;
+  left: 16px;
+  top: -10px;
+  width: 2px;
+  height: 50px;
+  background: #000;
+}
+
+.note-flag {
+  position: absolute;
+  left: 18px;
+  top: -10px;
+  width: 10px;
+  height: 30px;
+  background: #000;
+  border-radius: 0 0 0 6px;
+}
+
+.note-name {
+  position: absolute;
+  left: 20px;
+  top: -5px;
+  font-size: 10px;
+  font-weight: 600;
+  color: #666;
+  white-space: nowrap;
+}
+
+.chord-display {
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border-color);
+}
+
+.instructions {
+  background: var(--bg-secondary);
+  padding: 2rem;
+  border-radius: var(--border-radius-lg);
+  box-shadow: var(--shadow-md);
+}
+
+.instructions h4 {
+  margin-top: 0;
+  color: var(--text-primary);
+}
+
+.instructions ol {
+  margin: 0;
+  padding-left: 1.5rem;
+  color: var(--text-primary);
+  line-height: 2;
+}
+
+.instructions li {
+  margin-bottom: 0.5rem;
+}
+
+/* 반응형 디자인 */
+@media (max-width: 968px) {
+  .composer-main {
+    grid-template-columns: 1fr;
+  }
+
+  .rhythm-composer {
+    padding: 1.5rem 1rem;
+  }
+
+  .composer-controls {
+    grid-template-columns: 1fr;
+  }
+}
+

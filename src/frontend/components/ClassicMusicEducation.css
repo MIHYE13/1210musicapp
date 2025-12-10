@@ -1,0 +1,415 @@
+.classic-music-education {
+  padding: 2.5rem 2rem;
+  max-width: 1400px;
+  margin: 0 auto;
+  animation: fadeIn 0.5s ease-out;
+}
+
+.classic-music-education h2 {
+  background: var(--primary-gradient);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  margin-bottom: 2rem;
+  font-size: 2.2rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  text-align: center;
+}
+
+.pieces-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 1.5rem;
+  margin-bottom: 3rem;
+}
+
+.piece-card {
+  background: var(--bg-secondary);
+  padding: 1.5rem;
+  border-radius: var(--border-radius-lg);
+  box-shadow: var(--shadow-md);
+  cursor: pointer;
+  transition: all var(--transition-normal);
+  border: 2px solid transparent;
+}
+
+.piece-card:hover {
+  transform: translateY(-4px);
+  box-shadow: var(--shadow-xl);
+  border-color: var(--primary-color);
+}
+
+.piece-card.selected {
+  border-color: var(--primary-color);
+  background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%);
+}
+
+.piece-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 1rem;
+}
+
+.piece-header h3 {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 1.3rem;
+  font-weight: 700;
+}
+
+.composer {
+  background: var(--primary-gradient);
+  color: white;
+  padding: 0.25rem 0.75rem;
+  border-radius: var(--border-radius-md);
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.piece-meta {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.period {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  padding: 0.25rem 0.75rem;
+  border-radius: var(--border-radius-md);
+  font-size: 0.8rem;
+}
+
+.difficulty {
+  padding: 0.25rem 0.75rem;
+  border-radius: var(--border-radius-md);
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.difficulty.초급 {
+  background: #4ade80;
+  color: white;
+}
+
+.difficulty.중급 {
+  background: #fbbf24;
+  color: white;
+}
+
+.difficulty.고급 {
+  background: #f87171;
+  color: white;
+}
+
+.piece-description {
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+  line-height: 1.6;
+  margin-bottom: 1rem;
+}
+
+.piece-info {
+  display: flex;
+  gap: 1rem;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+
+.piece-detail-section {
+  margin-top: 3rem;
+  background: var(--bg-secondary);
+  padding: 2rem;
+  border-radius: var(--border-radius-lg);
+  box-shadow: var(--shadow-md);
+}
+
+.piece-title-section {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 2rem;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.piece-title-section h3 {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 1.8rem;
+}
+
+.analyze-button {
+  padding: 0.9rem 1.75rem;
+  background: var(--primary-gradient);
+  color: white;
+  border: none;
+  border-radius: var(--border-radius-md);
+  cursor: pointer;
+  font-size: 1rem;
+  font-weight: 500;
+  transition: all var(--transition-normal);
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.analyze-button:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+}
+
+.analyze-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.youtube-section {
+  margin-bottom: 2rem;
+}
+
+.youtube-section h4 {
+  margin-bottom: 1rem;
+  color: var(--text-primary);
+}
+
+.youtube-embed {
+  border-radius: var(--border-radius-md);
+  overflow: hidden;
+  box-shadow: var(--shadow-lg);
+}
+
+.tabs-section {
+  margin-top: 2rem;
+}
+
+.tabs {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 2rem;
+  border-bottom: 2px solid var(--border-color);
+}
+
+.tab {
+  padding: 1rem 2rem;
+  background: none;
+  border: none;
+  border-bottom: 3px solid transparent;
+  color: var(--text-secondary);
+  font-size: 1rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all var(--transition-normal);
+}
+
+.tab:hover {
+  color: var(--primary-color);
+  background: rgba(102, 126, 234, 0.05);
+}
+
+.tab.active {
+  color: var(--primary-color);
+  border-bottom-color: var(--primary-color);
+}
+
+.tab-content {
+  min-height: 400px;
+}
+
+.melody-section h4,
+.chord-section h4,
+.activity-section h4 {
+  margin-top: 0;
+  margin-bottom: 1.5rem;
+  color: var(--text-primary);
+  font-size: 1.5rem;
+}
+
+.melody-info {
+  margin-bottom: 2rem;
+}
+
+.melody-notes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 1rem;
+}
+
+.note-badge {
+  display: inline-block;
+  padding: 0.5rem 1rem;
+  background: var(--primary-gradient);
+  color: white;
+  border-radius: var(--border-radius-md);
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.piano-display {
+  margin-top: 2rem;
+}
+
+.piano-display h5 {
+  margin-bottom: 1rem;
+  color: var(--text-primary);
+}
+
+.activity-hint {
+  margin-top: 1rem;
+  padding: 1rem;
+  background: rgba(102, 126, 234, 0.1);
+  border-radius: var(--border-radius-md);
+  color: var(--text-secondary);
+  font-style: italic;
+}
+
+.chords-summary {
+  margin-bottom: 2rem;
+}
+
+.chords-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 1rem;
+}
+
+.chord-badge {
+  display: inline-block;
+  padding: 0.5rem 1rem;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border-radius: var(--border-radius-md);
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.chords-progression {
+  margin-top: 2rem;
+}
+
+.chord-item {
+  margin-bottom: 2rem;
+}
+
+.chord-item:last-child {
+  margin-bottom: 0;
+}
+
+.activity-suggestions {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 1.5rem;
+}
+
+.activity-card {
+  background: var(--bg-primary);
+  padding: 1.5rem;
+  border-radius: var(--border-radius-md);
+  border-left: 4px solid var(--primary-color);
+  box-shadow: var(--shadow-sm);
+}
+
+.activity-card h5 {
+  margin-top: 0;
+  margin-bottom: 1rem;
+  color: var(--primary-color);
+  font-size: 1.2rem;
+}
+
+.activity-card p {
+  color: var(--text-secondary);
+  margin-bottom: 1rem;
+  line-height: 1.6;
+}
+
+.activity-card ul {
+  margin: 0;
+  padding-left: 1.5rem;
+  color: var(--text-primary);
+}
+
+.activity-card li {
+  margin-bottom: 0.5rem;
+  line-height: 1.6;
+}
+
+.theory-content {
+  background: var(--bg-primary);
+  padding: 2rem;
+  border-radius: var(--border-radius-md);
+  border-left: 4px solid var(--primary-color);
+}
+
+.theory-text {
+  color: var(--text-primary);
+  line-height: 1.8;
+  white-space: pre-wrap;
+}
+
+.empty-state,
+.loading-state {
+  text-align: center;
+  padding: 3rem;
+  color: var(--text-secondary);
+}
+
+.empty-state .hint {
+  margin-top: 1rem;
+  font-style: italic;
+}
+
+.loading-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+}
+
+.spinner {
+  display: inline-block;
+  width: 20px;
+  height: 20px;
+  border: 3px solid rgba(102, 126, 234, 0.3);
+  border-radius: 50%;
+  border-top-color: var(--primary-color);
+  animation: spin 1s ease-in-out infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* 반응형 디자인 */
+@media (max-width: 768px) {
+  .classic-music-education {
+    padding: 1.5rem 1rem;
+  }
+
+  .pieces-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .piece-title-section {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .activity-suggestions {
+    grid-template-columns: 1fr;
+  }
+
+  .tabs {
+    flex-wrap: wrap;
+  }
+
+  .tab {
+    padding: 0.75rem 1rem;
+    font-size: 0.9rem;
+  }
+}
+

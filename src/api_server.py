@@ -13,6 +13,8 @@ from pathlib import Path
 import tempfile
 import json
 import asyncio
+import subprocess
+import shutil
 
 # Windows 콘솔 인코딩 설정 (이모지 출력 오류 방지)
 if sys.platform == 'win32':
@@ -230,6 +232,78 @@ except Exception as e:
     HAS_CHORD_ANALYZER = False
     ChordAnalyzer = None
 
+# OMR Service (optional)
+try:
+    from omr_service import AudiverisOmr, OmrError
+    HAS_OMR_SERVICE = True
+    print("[OK] omr_service 모듈 로드 성공")
+except ImportError as e:
+    print(f"[WARN] omr_service를 불러올 수 없습니다: {e}")
+    HAS_OMR_SERVICE = False
+    AudiverisOmr = None
+    OmrError = None
+except Exception as e:
+    print(f"[WARN] omr_service 로드 중 예상치 못한 오류: {e}")
+    HAS_OMR_SERVICE = False
+    AudiverisOmr = None
+    OmrError = None
+
+def get_audiveris_path() -> Optional[str]:
+    """Audiveris 실행 파일 경로 찾기"""
+    import shutil
+    
+    # 1. 하드코딩된 경로 확인 (우선순위)
+    hardcoded_paths = [
+        r"C:\audiveris\bin\audiveris.bat",
+        r"C:\audiveris\bin\audiveris.exe",
+    ]
+    
+    for path_str in hardcoded_paths:
+        path = Path(path_str)
+        if path.exists():
+            return str(path)
+    
+    # 2. PATH에서 찾기
+    audiveris_exe = shutil.which("audiveris")
+    if audiveris_exe:
+        return audiveris_exe
+    
+    # 3. 일반적인 Windows 경로 확인
+    common_paths = [
+        r"C:\Program Files\Audiveris\bin\audiveris.exe",
+        r"C:\Program Files (x86)\Audiveris\bin\audiveris.exe",
+        r"C:\Audiveris\bin\audiveris.exe",
+    ]
+    
+    for path_str in common_paths:
+        path = Path(path_str)
+        if path.exists():
+            return str(path)
+    
+    return None
+
+# OMR 엔진 초기화
+omr_engine = None
+OMR_AVAILABLE = False
+
+if HAS_OMR_SERVICE and AudiverisOmr:
+    audiveris_path = get_audiveris_path()
+    if audiveris_path:
+        try:
+            omr_engine = AudiverisOmr(Path(audiveris_path))
+            OMR_AVAILABLE = True
+            print(f"[OK] OMR 엔진 초기화 성공: {audiveris_path}")
+        except OmrError as e:
+            print(f"[WARN] OMR 엔진 초기화 실패: {e}")
+            OMR_AVAILABLE = False
+        except Exception as e:
+            print(f"[WARN] OMR 엔진 초기화 중 예상치 못한 오류: {e}")
+            OMR_AVAILABLE = False
+    else:
+        print("[WARN] Audiveris 경로를 찾을 수 없습니다. OMR 기능이 비활성화됩니다.")
+else:
+    print("[WARN] OMR 서비스가 사용할 수 없습니다.")
+
 # PDF Parser (optional)
 try:
     from pdf_parser import PDFScoreParser
@@ -309,6 +383,7 @@ async def root():
             "audio": "/api/audio/process",
             "audio_musicxml": "/api/audio/upload-to-musicxml",
             "score": "/api/score/process",
+            "score_from_image": "/api/score/from-image",
             "ai": "/api/ai/chat",
             "perplexity": "/api/perplexity/search",
             "youtube": "/api/youtube/search",
@@ -330,6 +405,7 @@ async def health_check():
             "perplexity_assistant": HAS_PERPLEXITY_ASSISTANT,
             "youtube_helper": HAS_YOUTUBE_HELPER,
             "chord_analyzer": HAS_CHORD_ANALYZER,
+            "omr_service": OMR_AVAILABLE,
         }
     }
 
@@ -708,6 +784,76 @@ async def upload_audio_to_musicxml(file: UploadFile = File(...)):
 
 # ==================== Score Processing ====================
 
+@app.post("/api/score/from-image")
+async def convert_image_to_score_endpoint(file: UploadFile = File(...)):
+    """
+    이미지 파일을 OMR로 처리하여 MusicXML로 변환
+    
+    Args:
+        file: 이미지 파일 (PNG, JPG, JPEG, GIF, BMP 등)
+        
+    Returns:
+        MusicXML 문자열과 상태 정보
+    """
+    if not OMR_AVAILABLE or not omr_engine:
+        raise HTTPException(
+            status_code=501,
+            detail="이미지에서 악보를 인식하는 OMR 기능이 아직 서버에 설치되지 않았습니다."
+        )
+    
+    try:
+        # 파일 데이터 읽기
+        data = await file.read()
+        
+        # 파일 확장자 확인
+        suffix = Path(file.filename).suffix if file.filename else ".png"
+        if suffix not in [".png", ".jpg", ".jpeg", ".gif", ".bmp"]:
+            suffix = ".png"  # 기본값
+        
+        # OMR로 MusicXML 변환
+        musicxml_text = omr_engine.image_to_musicxml(data, suffix=suffix)
+        
+        # music21로 파싱하여 검증 및 추가 처리 가능
+        try:
+            from music21 import converter
+            score = converter.parse(musicxml_text)
+            
+            # Score ID 생성 및 저장
+            score_id = f"score_{len(score_storage)}"
+            score_storage[score_id] = score
+            
+            return {
+                "status": "ok",
+                "format": "musicxml",
+                "scoreId": score_id,
+                "musicxml": musicxml_text,
+                "noteCount": len(score.flat.notes) if score else 0,
+                "message": "이미지에서 악보를 성공적으로 인식했습니다."
+            }
+        except Exception as parse_error:
+            # music21 파싱 실패해도 MusicXML은 반환
+            print(f"[WARN] music21 파싱 실패, MusicXML만 반환: {parse_error}")
+            return {
+                "status": "ok",
+                "format": "musicxml",
+                "musicxml": musicxml_text,
+                "warning": "악보 파싱 중 일부 오류가 발생했지만 MusicXML은 생성되었습니다."
+            }
+            
+    except OmrError as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"OMR 처리 중 오류가 발생했습니다: {str(e)}"
+        )
+    except Exception as e:
+        import traceback
+        print(f"[ERROR] 이미지 변환 오류: {str(e)}")
+        traceback.print_exc()
+        raise HTTPException(
+            status_code=500,
+            detail=f"이미지 처리 중 예상치 못한 오류가 발생했습니다: {str(e)}"
+        )
+
 @app.post("/api/score/process")
 async def process_score(
     file: UploadFile = File(...),
@@ -882,10 +1028,48 @@ async def convert_image_to_score(image_path: str):
     """이미지 파일을 악보로 변환 (OMR 사용)"""
     try:
         from music21 import converter
+        
+        # 방법 1: OMR Service를 사용한 Audiveris OMR
+        if HAS_OMR_SERVICE and AudiverisOmr:
+            audiveris_path = get_audiveris_path()
+            if audiveris_path:
+                try:
+                    omr = AudiverisOmr(audiveris_path)
+                    
+                    # 이미지 파일 읽기
+                    image_bytes = Path(image_path).read_bytes()
+                    
+                    # 이미지 확장자 확인
+                    suffix = Path(image_path).suffix.lower()
+                    if suffix not in ['.png', '.jpg', '.jpeg', '.gif', '.bmp']:
+                        suffix = '.png'
+                    
+                    # OMR로 MusicXML 변환
+                    musicxml_text = omr.image_to_musicxml(image_bytes, suffix=suffix)
+                    
+                    # MusicXML 문자열을 임시 파일로 저장
+                    with tempfile.NamedTemporaryFile(mode='w', suffix='.xml', delete=False, encoding='utf-8') as tmp_xml:
+                        tmp_xml.write(musicxml_text)
+                        tmp_xml_path = tmp_xml.name
+                    
+                    try:
+                        # MusicXML을 music21 Score로 파싱
+                        score = converter.parse(tmp_xml_path)
+                        return score
+                    finally:
+                        # 임시 XML 파일 정리
+                        if os.path.exists(tmp_xml_path):
+                            os.unlink(tmp_xml_path)
+                            
+                except OmrError as e:
+                    print(f"[WARN] OMR 변환 실패: {str(e)}")
+                except Exception as e:
+                    print(f"[WARN] OMR 처리 중 오류: {str(e)}")
+        
+        # 방법 2: 기존 방식 (fallback)
         import subprocess
         import shutil
         
-        # 방법 1: Audiveris를 사용한 OMR
         if shutil.which('audiveris'):
             output_dir = tempfile.mkdtemp()
             try:
@@ -908,18 +1092,17 @@ async def convert_image_to_score(image_path: str):
                         return score
             finally:
                 # 임시 디렉토리 정리
-                import shutil
                 if os.path.exists(output_dir):
                     shutil.rmtree(output_dir, ignore_errors=True)
         
-        # 방법 2: 기본 악보 생성 (실제 OMR 없이)
-        # 실제 구현에서는 OMR 라이브러리 필요
-        # 여기서는 기본 구조만 반환
+        # 방법 3: 기본 악보 생성 (실제 OMR 없이)
         print("OMR 도구가 필요합니다. Audiveris를 설치하거나 이미지를 MusicXML로 변환해주세요.")
         return None
         
     except Exception as e:
         print(f"이미지 변환 오류: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return None
 
 async def convert_midi_to_mp3(midi_bytes: bytes) -> Optional[bytes]:

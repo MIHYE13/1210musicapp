@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react'
 import { 
-  HiMicrophone, 
   HiSparkles,
   HiSearch,
   HiPuzzle,
@@ -10,26 +9,26 @@ import { FaMusic } from 'react-icons/fa'
 import './App.css'
 import Header from './components/Header'
 import Navigation from './components/Navigation'
-import AudioToScore from './components/AudioToScore'
-import ScoreProcessing from './components/ScoreProcessing'
 import AIAssistant from './components/AIAssistant'
 import PerplexityYouTube from './components/PerplexityYouTube'
 import TeacherDashboard from './components/TeacherDashboard'
 import ChordAnalysis from './components/ChordAnalysis'
+import ClassicMusicEducation from './components/ClassicMusicEducation'
+import RhythmComposer from './components/RhythmComposer'
 
 type Page = 
   | 'home' 
-  | 'audio-to-score' 
-  | 'score-processing' 
+  | 'chord-builder' 
+  | 'rhythm-composer'
+  | 'classic-music' 
   | 'ai-assistant' 
   | 'perplexity-youtube' 
-  | 'teacher-dashboard' 
-  | 'chord-analysis'
+  | 'teacher-dashboard'
 
 function App() {
   const getPageFromHash = (): Page => {
     const hash = window.location.hash.slice(1)
-    const validPages: Page[] = ['home', 'audio-to-score', 'score-processing', 'ai-assistant', 'perplexity-youtube', 'teacher-dashboard', 'chord-analysis']
+    const validPages: Page[] = ['home', 'chord-builder', 'rhythm-composer', 'classic-music', 'ai-assistant', 'perplexity-youtube', 'teacher-dashboard']
     return validPages.includes(hash as Page) ? (hash as Page) : 'home'
   }
 
@@ -69,10 +68,10 @@ function App() {
           <div className="home-page" style={{ minHeight: '60vh', display: 'flex', flexDirection: 'column' }}>
             <h1>초등 음악 도우미</h1>
             <p className="subtitle">
-              오디오나 악보를 업로드하면 초등학생이 배우기 쉬운 형태로 변환해드립니다!
+              피아노 건반을 클릭하여 화음을 만들고, 음악 이론을 배워보세요!
             </p>
             <p className="features">
-              <strong>계이름 기재</strong> · <strong>다장조 변환</strong> · <strong>반주 추가</strong> · <strong>자동 재생</strong>
+              <strong>화음 구성</strong> · <strong>화음 분석</strong> · <strong>음악 이론 학습</strong> · <strong>교육 자료 검색</strong>
             </p>
             
             <div className="info-box">
@@ -83,19 +82,26 @@ function App() {
             </div>
 
             <div className="feature-grid">
-              <div className="feature-card" onClick={() => handlePageChange('audio-to-score')}>
+              <div className="feature-card main-feature" onClick={() => handlePageChange('rhythm-composer')}>
                 <div className="icon-wrapper">
-                  <HiMicrophone />
+                  <HiPuzzle />
                 </div>
-                <h3>오디오 → 악보</h3>
-                <p>MP3, WAV 파일을 업로드하여 악보로 변환</p>
+                <h3>🎼 리듬 작곡기</h3>
+                <p>박자에 맞춰 건반을 클릭하면 자동으로 화음 반주 악보가 그려집니다!</p>
               </div>
-              <div className="feature-card" onClick={() => handlePageChange('score-processing')}>
+              <div className="feature-card" onClick={() => handlePageChange('chord-builder')}>
+                <div className="icon-wrapper">
+                  <HiPuzzle />
+                </div>
+                <h3>🎹 화음 구성하기</h3>
+                <p>피아노 건반을 클릭하여 화음을 만들고 분석해보세요!</p>
+              </div>
+              <div className="feature-card" onClick={() => handlePageChange('classic-music')}>
                 <div className="icon-wrapper">
                   <FaMusic />
                 </div>
-                <h3>악보 처리</h3>
-                <p>계이름 추가, 다장조 변환, 반주 생성</p>
+                <h3>🎼 클래식 음악 감상</h3>
+                <p>유명 작곡가의 곡을 감상하고 멜로디와 화음을 배워보세요!</p>
               </div>
               <div className="feature-card" onClick={() => handlePageChange('ai-assistant')}>
                 <div className="icon-wrapper">
@@ -111,13 +117,6 @@ function App() {
                 <h3>정보 & 영상</h3>
                 <p>최신 정보 조사, 교육 영상 검색</p>
               </div>
-              <div className="feature-card" onClick={() => handlePageChange('chord-analysis')}>
-                <div className="icon-wrapper">
-                  <HiPuzzle />
-                </div>
-                <h3>화음 분석</h3>
-                <p>화음 자동 분석, 피아노 건반 표시</p>
-              </div>
               <div className="feature-card" onClick={() => handlePageChange('teacher-dashboard')}>
                 <div className="icon-wrapper">
                   <HiAcademicCap />
@@ -128,18 +127,18 @@ function App() {
             </div>
           </div>
         )
-      case 'audio-to-score':
-        return <AudioToScore />
-      case 'score-processing':
-        return <ScoreProcessing />
+      case 'chord-builder':
+        return <ChordAnalysis />
+      case 'rhythm-composer':
+        return <RhythmComposer />
+      case 'classic-music':
+        return <ClassicMusicEducation />
       case 'ai-assistant':
         return <AIAssistant />
       case 'perplexity-youtube':
         return <PerplexityYouTube />
       case 'teacher-dashboard':
         return <TeacherDashboard />
-      case 'chord-analysis':
-        return <ChordAnalysis />
       default:
         return <div>페이지를 찾을 수 없습니다.</div>
     }

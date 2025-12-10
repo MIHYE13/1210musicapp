@@ -13,6 +13,37 @@ from typing import Optional
 from pathlib import Path
 import subprocess
 import os
+import shutil
+
+# OMR Service (optional)
+try:
+    from omr_service import AudiverisOmr, OmrError
+    HAS_OMR_SERVICE = True
+except ImportError:
+    HAS_OMR_SERVICE = False
+    AudiverisOmr = None
+    OmrError = None
+
+def get_audiveris_path() -> Optional[str]:
+    """Audiveris 실행 파일 경로 찾기"""
+    # 1. PATH에서 찾기
+    audiveris_exe = shutil.which("audiveris")
+    if audiveris_exe:
+        return audiveris_exe
+    
+    # 2. 일반적인 Windows 경로 확인
+    common_paths = [
+        r"C:\Program Files\Audiveris\bin\audiveris.exe",
+        r"C:\Program Files (x86)\Audiveris\bin\audiveris.exe",
+        r"C:\Audiveris\bin\audiveris.exe",
+    ]
+    
+    for path_str in common_paths:
+        path = Path(path_str)
+        if path.exists():
+            return str(path)
+    
+    return None
 
 class PDFScoreParser:
     """Parse PDF music scores using OMR (Optical Music Recognition)"""
@@ -32,12 +63,44 @@ class PDFScoreParser:
             Path to generated MusicXML file
         """
         try:
+            # 방법 1: OMR Service 사용 (권장)
+            if HAS_OMR_SERVICE and AudiverisOmr:
+                audiveris_path = get_audiveris_path()
+                if audiveris_path:
+                    try:
+                        omr = AudiverisOmr(audiveris_path)
+                        
+                        # PDF 파일을 바이너리로 읽기
+                        pdf_bytes = Path(pdf_path).read_bytes()
+                        
+                        # OMR로 MusicXML 변환
+                        musicxml_text = omr.image_to_musicxml(pdf_bytes, suffix=".pdf")
+                        
+                        # MusicXML 파일로 저장
+                        xml_path = self.temp_dir / "output" / f"{Path(pdf_path).stem}.xml"
+                        xml_path.parent.mkdir(parents=True, exist_ok=True)
+                        xml_path.write_text(musicxml_text, encoding='utf-8')
+                        
+                        return str(xml_path)
+                    except OmrError as e:
+                        if HAS_STREAMLIT and st:
+                            st.warning(f"OMR 변환 실패: {str(e)}")
+                        else:
+                            print(f"[WARN] OMR 변환 실패: {str(e)}")
+                    except Exception as e:
+                        if HAS_STREAMLIT and st:
+                            st.warning(f"OMR 처리 중 오류: {str(e)}")
+                        else:
+                            print(f"[WARN] OMR 처리 중 오류: {str(e)}")
+            
+            # 방법 2: 기존 방식 (fallback)
             output_dir = self.temp_dir / "output"
             output_dir.mkdir(exist_ok=True)
             
             # Run Audiveris CLI
+            audiveris_cmd = get_audiveris_path() or 'audiveris'
             result = subprocess.run([
-                'audiveris',
+                audiveris_cmd,
                 '-batch',
                 '-export',
                 '-output', str(output_dir),
@@ -52,10 +115,17 @@ class PDFScoreParser:
             
             return None
             
-        except (subprocess.TimeoutExpired, FileNotFoundError):
+        except (subprocess.TimeoutExpired, FileNotFoundError) as e:
+            if HAS_STREAMLIT and st:
+                st.warning(f"Audiveris를 찾을 수 없습니다: {str(e)}")
+            else:
+                print(f"[WARN] Audiveris를 찾을 수 없습니다: {str(e)}")
             return None
         except Exception as e:
-            st.warning(f"Audiveris 오류: {str(e)}")
+            if HAS_STREAMLIT and st:
+                st.warning(f"Audiveris 오류: {str(e)}")
+            else:
+                print(f"[WARN] Audiveris 오류: {str(e)}")
             return None
     
     def convert_pdf_to_images(self, pdf_path: str) -> list:
