@@ -67,6 +67,18 @@ except Exception as e:
     print(f"[WARN] .env 파일 로드 중 오류: {str(e)}")
 
 # Optional imports with error handling
+# 먼저 필수 의존성 확인
+try:
+    import music21
+    print(f"[OK] music21 모듈 로드 성공 (버전: {music21.__version__})")
+except ImportError as e:
+    print(f"[WARN] music21이 설치되지 않았습니다: {e}")
+    print("   설치 방법: pip install music21")
+    music21 = None
+except Exception as e:
+    print(f"[WARN] music21 로드 중 오류: {e}")
+    music21 = None
+
 try:
     # Ensure src directory is in path before importing
     src_dir = Path(__file__).parent
@@ -92,18 +104,50 @@ except Exception as e:
     AudioProcessor = None
 
 try:
+    # Ensure src directory is in path
+    src_dir = Path(__file__).parent
+    if str(src_dir) not in sys.path:
+        sys.path.insert(0, str(src_dir))
+    
     from score_processor import ScoreProcessor
     HAS_SCORE_PROCESSOR = True
+    print("[OK] score_processor 모듈 로드 성공")
 except ImportError as e:
+    import traceback
     print(f"[WARN] score_processor를 불러올 수 없습니다: {e}")
+    print(f"[WARN] 상세 오류:")
+    traceback.print_exc()
+    HAS_SCORE_PROCESSOR = False
+    ScoreProcessor = None
+except Exception as e:
+    import traceback
+    print(f"[WARN] score_processor 로드 중 예상치 못한 오류: {e}")
+    print(f"[WARN] 상세 오류:")
+    traceback.print_exc()
     HAS_SCORE_PROCESSOR = False
     ScoreProcessor = None
 
 try:
+    # Ensure src directory is in path
+    src_dir = Path(__file__).parent
+    if str(src_dir) not in sys.path:
+        sys.path.insert(0, str(src_dir))
+    
     from chord_generator import ChordGenerator
     HAS_CHORD_GENERATOR = True
+    print("[OK] chord_generator 모듈 로드 성공")
 except ImportError as e:
+    import traceback
     print(f"[WARN] chord_generator를 불러올 수 없습니다: {e}")
+    print(f"[WARN] 상세 오류:")
+    traceback.print_exc()
+    HAS_CHORD_GENERATOR = False
+    ChordGenerator = None
+except Exception as e:
+    import traceback
+    print(f"[WARN] chord_generator 로드 중 예상치 못한 오류: {e}")
+    print(f"[WARN] 상세 오류:")
+    traceback.print_exc()
     HAS_CHORD_GENERATOR = False
     ChordGenerator = None
 

@@ -58,28 +58,37 @@ class YouTubeDownloader:
             Dictionary with video info
         """
         try:
-            # Check if yt-dlp is installed
-            result = subprocess.run(
-                ['yt-dlp', '--dump-json', '--no-playlist', url],
-                capture_output=True,
-                text=True,
-                timeout=30
-            )
+            # Use yt-dlp Python module
+            try:
+                import yt_dlp
+            except ImportError:
+                if HAS_STREAMLIT and st:
+                    st.warning("yt-dlp가 설치되지 않았습니다. pip install yt-dlp를 실행해주세요.")
+                else:
+                    print("[WARN] yt-dlp가 설치되지 않았습니다.")
+                return None
             
-            if result.returncode == 0:
-                import json
-                info = json.loads(result.stdout)
+            ydl_opts = {
+                'quiet': True,
+                'no_warnings': True,
+            }
+            
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                info = ydl.extract_info(url, download=False)
+                
                 return {
                     'title': info.get('title', 'Unknown'),
                     'duration': info.get('duration', 0),
                     'uploader': info.get('uploader', 'Unknown'),
                     'id': info.get('id', ''),
                 }
-            else:
-                return None
                 
-        except (subprocess.TimeoutExpired, FileNotFoundError, Exception) as e:
-            st.warning(f"yt-dlp를 사용할 수 없습니다: {str(e)}")
+        except Exception as e:
+            error_msg = f"yt-dlp를 사용할 수 없습니다: {str(e)}"
+            if HAS_STREAMLIT and st:
+                st.warning(error_msg)
+            else:
+                print(f"[WARN] {error_msg}")
             return None
     
     def download_audio(self, url: str) -> Optional[str]:
