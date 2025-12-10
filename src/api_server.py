@@ -1312,36 +1312,49 @@ async def analyze_chord_youtube(request: dict):
     temp_audio_path = None
     
     try:
-        # yt-dlp를 사용하여 오디오 다운로드
-        import subprocess
-        import shutil
-        
-        if not shutil.which('yt-dlp'):
-            raise HTTPException(status_code=500, detail="yt-dlp가 설치되지 않았습니다. 서버에 yt-dlp를 설치해주세요.")
+        # yt-dlp Python 모듈을 사용하여 오디오 다운로드
+        try:
+            import yt_dlp
+        except ImportError:
+            raise HTTPException(
+                status_code=500, 
+                detail="yt-dlp가 설치되지 않았습니다. 서버에 yt-dlp를 설치해주세요: pip install yt-dlp"
+            )
         
         # 임시 오디오 파일 경로
         temp_audio_path = tempfile.NamedTemporaryFile(delete=False, suffix=".mp3").name
+        base_path = temp_audio_path.replace('.mp3', '')
+        
+        # yt-dlp 옵션 설정
+        ydl_opts = {
+            'format': 'bestaudio/best',
+            'outtmpl': base_path + '.%(ext)s',
+            'postprocessors': [{
+                'key': 'FFmpegExtractAudio',
+                'preferredcodec': 'mp3',
+                'preferredquality': '192',
+            }],
+            'quiet': True,
+            'no_warnings': True,
+        }
         
         # YouTube 오디오 다운로드
-        result = subprocess.run([
-            'yt-dlp',
-            '--extract-audio',
-            '--audio-format', 'mp3',
-            '--audio-quality', '0',
-            '--output', temp_audio_path.replace('.mp3', ''),
-            '--no-playlist',
-            youtube_url
-        ], capture_output=True, text=True, timeout=120)
-        
-        if result.returncode != 0:
-            raise HTTPException(status_code=500, detail=f"YouTube 오디오 다운로드 실패: {result.stderr}")
+        try:
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                ydl.download([youtube_url])
+        except Exception as e:
+            raise HTTPException(
+                status_code=500, 
+                detail=f"YouTube 오디오 다운로드 실패: {str(e)}"
+            )
         
         # 실제 다운로드된 파일 경로 찾기 (yt-dlp가 확장자를 추가할 수 있음)
         possible_paths = [
+            base_path + '.mp3',
             temp_audio_path,
-            temp_audio_path.replace('.mp3', ''),
-            temp_audio_path.replace('.mp3', '.m4a'),
-            temp_audio_path.replace('.mp3', '.webm'),
+            base_path + '.m4a',
+            base_path + '.webm',
+            base_path + '.opus',
         ]
         
         actual_audio_path = None
@@ -1351,7 +1364,20 @@ async def analyze_chord_youtube(request: dict):
                 break
         
         if not actual_audio_path:
-            raise HTTPException(status_code=500, detail="다운로드된 오디오 파일을 찾을 수 없습니다.")
+            # 디렉토리에서 파일 찾기
+            base_dir = os.path.dirname(base_path)
+            base_name = os.path.basename(base_path)
+            if os.path.exists(base_dir):
+                for file in os.listdir(base_dir):
+                    if file.startswith(base_name):
+                        actual_audio_path = os.path.join(base_dir, file)
+                        break
+        
+        if not actual_audio_path:
+            raise HTTPException(
+                status_code=500, 
+                detail="다운로드된 오디오 파일을 찾을 수 없습니다. 다운로드가 실패했을 수 있습니다."
+            )
         
         # 모듈 확인
         if not HAS_AUDIO_PROCESSOR or not audio_processor:

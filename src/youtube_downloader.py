@@ -103,28 +103,69 @@ class YouTubeDownloader:
             return str(output_path)
         
         try:
-            # Use yt-dlp to download
-            result = subprocess.run([
-                'yt-dlp',
-                '--extract-audio',
-                '--audio-format', 'mp3',
-                '--audio-quality', '0',
-                '--output', str(output_path.with_suffix('')),
-                '--no-playlist',
-                url
-            ], capture_output=True, text=True, timeout=120)
-            
-            if result.returncode == 0 and output_path.exists():
-                return str(output_path)
-            else:
-                st.error(f"다운로드 실패: {result.stderr}")
+            # Use yt-dlp Python module to download
+            try:
+                import yt_dlp
+            except ImportError:
+                if HAS_STREAMLIT and st:
+                    st.error("yt-dlp가 설치되지 않았습니다. pip install yt-dlp를 실행해주세요.")
+                else:
+                    print("[ERROR] yt-dlp가 설치되지 않았습니다. pip install yt-dlp를 실행해주세요.")
                 return None
-                
-        except subprocess.TimeoutExpired:
-            st.error("다운로드 시간 초과 (2분)")
+            
+            # yt-dlp 옵션 설정
+            ydl_opts = {
+                'format': 'bestaudio/best',
+                'outtmpl': str(output_path.with_suffix('')) + '.%(ext)s',
+                'postprocessors': [{
+                    'key': 'FFmpegExtractAudio',
+                    'preferredcodec': 'mp3',
+                    'preferredquality': '192',
+                }],
+                'quiet': True,
+                'no_warnings': True,
+            }
+            
+            # YouTube 오디오 다운로드
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                ydl.download([url])
+            
+            # 다운로드된 파일 찾기
+            possible_paths = [
+                output_path,
+                output_path.with_suffix('.m4a'),
+                output_path.with_suffix('.webm'),
+                output_path.with_suffix('.opus'),
+            ]
+            
+            for path in possible_paths:
+                if path.exists():
+                    # MP3가 아니면 변환 필요
+                    if path.suffix != '.mp3':
+                        # FFmpeg로 변환 (있는 경우)
+                        import shutil
+                        if shutil.which('ffmpeg'):
+                            import subprocess
+                            subprocess.run([
+                                'ffmpeg', '-i', str(path), 
+                                '-acodec', 'libmp3lame', '-ab', '192k',
+                                str(output_path), '-y'
+                            ], capture_output=True, timeout=30)
+                            if output_path.exists():
+                                path.unlink()  # 원본 파일 삭제
+                                return str(output_path)
+                    return str(path)
+            
             return None
-        except FileNotFoundError:
-            st.error("yt-dlp가 설치되지 않았습니다. pip install yt-dlp")
+                
+        except Exception as e:
+            error_msg = f"다운로드 실패: {str(e)}"
+            if HAS_STREAMLIT and st:
+                st.error(error_msg)
+            else:
+                print(f"[ERROR] {error_msg}")
+            import traceback
+            traceback.print_exc()
             return None
         except Exception as e:
             st.error(f"다운로드 오류: {str(e)}")
