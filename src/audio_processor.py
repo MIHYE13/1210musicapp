@@ -34,6 +34,12 @@ class AudioProcessor:
     
     def __init__(self):
         """Initialize audio processor"""
+        # Check required dependencies
+        if sf is None:
+            raise ImportError("soundfile이 설치되지 않았습니다. pip install soundfile를 실행해주세요.")
+        if stream is None or note is None:
+            raise ImportError("music21이 설치되지 않았습니다. pip install music21을 실행해주세요.")
+        
         self.sample_rate = 22050
         self.model = None
     
