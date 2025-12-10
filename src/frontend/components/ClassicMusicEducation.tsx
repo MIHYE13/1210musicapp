@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import './ClassicMusicEducation.css'
 import PianoKeyboard from './PianoKeyboard'
-import { aiApi, chordApi } from '../utils/api'
+import { aiApi, chordApi, youtubeApi } from '../utils/api'
 
 interface ClassicPiece {
   id: string
@@ -458,6 +458,16 @@ const CLASSIC_PIECES: ClassicPiece[] = [
   }
 ]
 
+interface YouTubeVideo {
+  videoId: string
+  title: string
+  channel: string
+  thumbnail?: string
+  url: string
+  description?: string
+  viewCount?: number
+}
+
 const ClassicMusicEducation = () => {
   const [selectedPiece, setSelectedPiece] = useState<ClassicPiece | null>(null)
   const [isAnalyzing, setIsAnalyzing] = useState(false)
@@ -465,10 +475,40 @@ const ClassicMusicEducation = () => {
   const [musicTheory, setMusicTheory] = useState<string>('')
   const [isLoadingTheory, setIsLoadingTheory] = useState(false)
   const [activeSection, setActiveSection] = useState<'melody' | 'chord' | 'activity'>('melody')
+  
+  // 퀴즈 관련 상태
+  const [quizMode, setQuizMode] = useState<'none' | 'short-answer' | 'ox'>('none')
+  const [quizQuestions, setQuizQuestions] = useState<Array<{
+    question: string
+    answer: string
+    type: 'short-answer' | 'ox'
+    userAnswer?: string
+    isCorrect?: boolean
+  }>>([])
+  const [currentQuestionIndex, setCurrentQuestionIndex] = useState<number>(0)
+  const [userAnswer, setUserAnswer] = useState<string>('')
+  const [quizScore, setQuizScore] = useState<{ correct: number; total: number }>({ correct: 0, total: 0 })
+  const [isLoadingQuiz, setIsLoadingQuiz] = useState(false)
+  const [isQuizComplete, setIsQuizComplete] = useState(false)
+  
+  // 학생 직접 검색 기능
+  const [searchMode, setSearchMode] = useState<'classic' | 'search'>('classic')
+  const [searchQuery, setSearchQuery] = useState('')
+  const [isSearching, setIsSearching] = useState(false)
+  const [searchResults, setSearchResults] = useState<YouTubeVideo[]>([])
+  const [selectedVideo, setSelectedVideo] = useState<YouTubeVideo | null>(null)
+  const [customYoutubeId, setCustomYoutubeId] = useState<string>('')
 
   useEffect(() => {
     if (selectedPiece) {
       loadMusicTheory()
+      // 퀴즈 초기화
+      setQuizMode('none')
+      setQuizQuestions([])
+      setCurrentQuestionIndex(0)
+      setUserAnswer('')
+      setQuizScore({ correct: 0, total: 0 })
+      setIsQuizComplete(false)
     }
   }, [selectedPiece])
 
@@ -497,6 +537,204 @@ const ClassicMusicEducation = () => {
     } finally {
       setIsLoadingTheory(false)
     }
+  }
+
+  // 퀴즈 문제 생성
+  const generateQuiz = async (type: 'short-answer' | 'ox') => {
+    if (!selectedPiece) return
+
+    setIsLoadingQuiz(true)
+    setQuizMode(type)
+    setQuizQuestions([])
+    setCurrentQuestionIndex(0)
+    setUserAnswer('')
+    setQuizScore({ correct: 0, total: 0 })
+    setIsQuizComplete(false)
+
+    try {
+      const prompt = `${selectedPiece.composer}의 "${selectedPiece.title}"에 대해 초등학생 수준의 음악 퀴즈 문제를 만들어주세요.
+
+요구사항:
+- ${type === 'short-answer' ? '단답형 문제 5개' : 'OX형 문제 5개'}
+- 초등학생이 이해할 수 있는 쉬운 난이도
+- 곡의 특징, 작곡가, 음악 이론 등에 관한 문제
+- ${type === 'short-answer' ? '답은 한 단어 또는 짧은 문장으로' : 'O 또는 X로 답할 수 있는 문제'}
+
+응답 형식 (JSON):
+{
+  "questions": [
+    {
+      "question": "문제 내용",
+      "answer": "${type === 'short-answer' ? '정답 (한 단어 또는 짧은 문장)' : 'O 또는 X'}",
+      "type": "${type}"
+    }
+  ]
+}
+
+JSON 형식으로만 응답해주세요.`
+
+      const response = await aiApi.chat(prompt)
+      if (response.success && response.data) {
+        const data = response.data as any
+        let questions: Array<{ question: string; answer: string; type: 'short-answer' | 'ox' }> = []
+        
+        // JSON 파싱 시도
+        try {
+          const responseText = data.response || data.message || JSON.stringify(data)
+          // JSON 부분 추출
+          const jsonMatch = responseText.match(/\{[\s\S]*\}/)
+          if (jsonMatch) {
+            const parsed = JSON.parse(jsonMatch[0])
+            questions = parsed.questions || []
+          } else {
+            // JSON이 아닌 경우 기본 문제 생성
+            questions = generateDefaultQuestions(type)
+          }
+        } catch (e) {
+          // 파싱 실패 시 기본 문제 생성
+          questions = generateDefaultQuestions(type)
+        }
+
+        if (questions.length === 0) {
+          questions = generateDefaultQuestions(type)
+        }
+
+        setQuizQuestions(questions)
+        setQuizScore({ correct: 0, total: questions.length })
+      } else {
+        // 기본 문제 생성
+        const defaultQuestions = generateDefaultQuestions(type)
+        setQuizQuestions(defaultQuestions)
+        setQuizScore({ correct: 0, total: defaultQuestions.length })
+      }
+    } catch (error) {
+      console.error('퀴즈 생성 실패:', error)
+      // 기본 문제 생성
+      const defaultQuestions = generateDefaultQuestions(type)
+      setQuizQuestions(defaultQuestions)
+      setQuizScore({ correct: 0, total: defaultQuestions.length })
+    } finally {
+      setIsLoadingQuiz(false)
+    }
+  }
+
+  // 기본 문제 생성 (AI 실패 시 사용)
+  const generateDefaultQuestions = (type: 'short-answer' | 'ox'): Array<{ question: string; answer: string; type: 'short-answer' | 'ox' }> => {
+    if (!selectedPiece) return []
+
+    if (type === 'short-answer') {
+      return [
+        {
+          question: `${selectedPiece.composer}의 "${selectedPiece.title}"의 작곡가는 누구인가요?`,
+          answer: selectedPiece.composer,
+          type: 'short-answer'
+        },
+        {
+          question: `이 곡의 시대는 무엇인가요?`,
+          answer: selectedPiece.period,
+          type: 'short-answer'
+        },
+        {
+          question: `이 곡의 조성은 무엇인가요?`,
+          answer: selectedPiece.keySignature.replace('장조', '').replace('단조', ''),
+          type: 'short-answer'
+        },
+        {
+          question: `이 곡의 박자는 무엇인가요?`,
+          answer: selectedPiece.timeSignature,
+          type: 'short-answer'
+        },
+        {
+          question: `이 곡의 난이도는 무엇인가요?`,
+          answer: selectedPiece.difficulty,
+          type: 'short-answer'
+        }
+      ]
+    } else {
+      return [
+        {
+          question: `${selectedPiece.composer}는 고전주의 시대의 작곡가입니다.`,
+          answer: selectedPiece.period === '고전주의' ? 'O' : 'X',
+          type: 'ox'
+        },
+        {
+          question: `이 곡의 조성은 ${selectedPiece.keySignature}입니다.`,
+          answer: 'O',
+          type: 'ox'
+        },
+        {
+          question: `이 곡은 ${selectedPiece.timeSignature}박자로 되어 있습니다.`,
+          answer: 'O',
+          type: 'ox'
+        },
+        {
+          question: `이 곡은 매우 어려운 곡입니다.`,
+          answer: selectedPiece.difficulty === '고급' ? 'O' : 'X',
+          type: 'ox'
+        },
+        {
+          question: `${selectedPiece.composer}는 바로크 시대의 작곡가입니다.`,
+          answer: selectedPiece.period === '바로크' ? 'O' : 'X',
+          type: 'ox'
+        }
+      ]
+    }
+  }
+
+  // 답안 제출
+  const handleSubmitAnswer = () => {
+    if (!userAnswer.trim() || currentQuestionIndex >= quizQuestions.length) return
+
+    const currentQuestion = quizQuestions[currentQuestionIndex]
+    let isCorrect = false
+
+    if (quizMode === 'ox') {
+      isCorrect = userAnswer.trim().toUpperCase() === currentQuestion.answer.toUpperCase()
+    } else {
+      // 단답형: 대소문자 무시하고 비교
+      const normalizedUserAnswer = userAnswer.trim().toLowerCase()
+      const normalizedCorrectAnswer = currentQuestion.answer.toLowerCase()
+      isCorrect = normalizedUserAnswer === normalizedCorrectAnswer || 
+                  normalizedCorrectAnswer.includes(normalizedUserAnswer) ||
+                  normalizedUserAnswer.includes(normalizedCorrectAnswer)
+    }
+
+    // 문제 업데이트
+    const updatedQuestions = [...quizQuestions]
+    updatedQuestions[currentQuestionIndex] = {
+      ...currentQuestion,
+      userAnswer: userAnswer.trim(),
+      isCorrect
+    }
+    setQuizQuestions(updatedQuestions)
+
+    // 점수 업데이트
+    if (isCorrect) {
+      setQuizScore(prev => ({ ...prev, correct: prev.correct + 1 }))
+    }
+
+    // 다음 문제로 이동 또는 완료
+    if (currentQuestionIndex < quizQuestions.length - 1) {
+      setCurrentQuestionIndex(currentQuestionIndex + 1)
+      setUserAnswer('')
+    } else {
+      setIsQuizComplete(true)
+    }
+  }
+
+  // 퀴즈 다시 시작
+  const handleRestartQuiz = () => {
+    setCurrentQuestionIndex(0)
+    setUserAnswer('')
+    setQuizScore({ correct: 0, total: quizQuestions.length })
+    setIsQuizComplete(false)
+    // 사용자 답안 초기화
+    const resetQuestions = quizQuestions.map(q => ({
+      ...q,
+      userAnswer: undefined,
+      isCorrect: undefined
+    }))
+    setQuizQuestions(resetQuestions)
   }
 
   const handleAnalyzePiece = async () => {
@@ -560,13 +798,159 @@ const ClassicMusicEducation = () => {
     setSelectedPiece(piece)
     setAnalysisResult(null)
     setActiveSection('melody')
+    setSelectedVideo(null)
+    setCustomYoutubeId('')
+  }
+
+  // YouTube 검색
+  const handleSearchYouTube = async () => {
+    if (!searchQuery.trim()) {
+      alert('검색어를 입력해주세요.')
+      return
+    }
+
+    setIsSearching(true)
+    setSearchResults([])
+    setError(null)
+
+    try {
+      const response = await youtubeApi.search(searchQuery, 10)
+      if (response.success && response.data) {
+        const data = response.data as any
+        const videos: YouTubeVideo[] = (data.videos || []).map((v: any) => ({
+          videoId: v.videoId || v.id,
+          title: v.title,
+          channel: v.channel || v.channelTitle,
+          thumbnail: v.thumbnail,
+          url: `https://www.youtube.com/watch?v=${v.videoId || v.id}`,
+          description: v.description,
+          viewCount: v.viewCount
+        }))
+        setSearchResults(videos)
+      } else {
+        setError('검색 결과를 불러올 수 없습니다.')
+      }
+    } catch (error) {
+      console.error('YouTube 검색 실패:', error)
+      setError('검색 중 오류가 발생했습니다.')
+    } finally {
+      setIsSearching(false)
+    }
+  }
+
+  // YouTube URL에서 ID 추출
+  const extractVideoId = (url: string): string | null => {
+    const patterns = [
+      /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([^&\n?#]+)/,
+      /^([a-zA-Z0-9_-]{11})$/,
+    ]
+    for (const pattern of patterns) {
+      const match = url.match(pattern)
+      if (match) return match[1]
+    }
+    return null
+  }
+
+  // 직접 URL 입력으로 분석
+  const handleAnalyzeCustomVideo = async (video: YouTubeVideo | string) => {
+    let videoId: string
+    let videoUrl: string
+
+    if (typeof video === 'string') {
+      // URL 문자열인 경우
+      const extractedId = extractVideoId(video)
+      if (!extractedId) {
+        alert('올바른 YouTube URL을 입력해주세요.')
+        return
+      }
+      videoId = extractedId
+      videoUrl = video.startsWith('http') ? video : `https://www.youtube.com/watch?v=${extractedId}`
+    } else {
+      // YouTubeVideo 객체인 경우
+      videoId = video.videoId
+      videoUrl = video.url
+      setSelectedVideo(video)
+      setCustomYoutubeId(videoId)
+    }
+
+    setIsAnalyzing(true)
+    setAnalysisResult(null)
+
+    try {
+      const apiResponse = await chordApi.analyzeYouTube(videoUrl)
+      
+      if (apiResponse.success && apiResponse.data) {
+        const data = apiResponse.data as any
+        const result = {
+          chords: data.chords || [],
+          chordsInfo: data.chordsInfo || [],
+          melody: data.melody || [],
+          message: data.message || '곡 분석이 완료되었습니다.'
+        }
+        setAnalysisResult(result)
+        setActiveSection('melody')
+      } else {
+        // 기본 데이터 사용
+        const fallbackResult = {
+          chords: ['Am', 'C', 'F', 'G'],
+          chordsInfo: [
+            { measure: 1, chord_name: 'Am', notes: ['A4', 'C5', 'E5'] },
+            { measure: 2, chord_name: 'C', notes: ['C4', 'E4', 'G4'] }
+          ],
+          melody: ['E5', 'D#5', 'E5', 'D#5', 'E5', 'B4', 'D5', 'C5', 'A4'],
+          message: '곡 분석이 완료되었습니다. (기본 데이터)'
+        }
+        setAnalysisResult(fallbackResult)
+        setActiveSection('melody')
+      }
+    } catch (error) {
+      console.error('곡 분석 실패:', error)
+      alert('곡 분석 중 오류가 발생했습니다.')
+    } finally {
+      setIsAnalyzing(false)
+    }
+  }
+
+  const [error, setError] = useState<string | null>(null)
+
+  // 현재 표시할 YouTube ID 결정
+  const getCurrentYoutubeId = (): string => {
+    if (customYoutubeId) return customYoutubeId
+    if (selectedPiece) return selectedPiece.youtubeId
+    return ''
   }
 
   return (
     <div className="classic-music-education">
       <h2>🎼 클래식 음악 감상 & 학습</h2>
       
-      <div className="pieces-grid">
+      {/* 모드 선택 */}
+      <div className="mode-selector">
+        <button
+          className={`mode-button ${searchMode === 'classic' ? 'active' : ''}`}
+          onClick={() => {
+            setSearchMode('classic')
+            setSelectedVideo(null)
+            setCustomYoutubeId('')
+            setAnalysisResult(null)
+          }}
+        >
+          📚 추천 곡 감상
+        </button>
+        <button
+          className={`mode-button ${searchMode === 'search' ? 'active' : ''}`}
+          onClick={() => {
+            setSearchMode('search')
+            setSelectedPiece(null)
+            setAnalysisResult(null)
+          }}
+        >
+          🔍 직접 곡 찾기
+        </button>
+      </div>
+
+      {searchMode === 'classic' && (
+        <div className="pieces-grid">
         {CLASSIC_PIECES.map((piece) => (
           <div
             key={piece.id}
@@ -616,11 +1000,12 @@ const ClassicMusicEducation = () => {
               <iframe
                 width="100%"
                 height="400"
-                src={`https://www.youtube.com/embed/${selectedPiece.youtubeId}`}
-                title={selectedPiece.title}
+                src={`https://www.youtube.com/embed/${getCurrentYoutubeId()}?rel=0`}
+                title={selectedPiece?.title || selectedVideo?.title || '음악 감상'}
                 frameBorder="0"
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                allow="accelerometer; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                 allowFullScreen
+                style={{ border: 'none', borderRadius: '8px' }}
               />
             </div>
           </div>
@@ -721,60 +1106,389 @@ const ClassicMusicEducation = () => {
 
               {activeSection === 'activity' && (
                 <div className="activity-section">
-                  <h4>학생 활동 제안</h4>
-                  {musicTheory ? (
-                    <div className="theory-content">
-                      <div className="theory-text" dangerouslySetInnerHTML={{ __html: musicTheory.replace(/\n/g, '<br/>') }} />
+                  <h4>🎯 음악 퀴즈</h4>
+                  
+                  {quizMode === 'none' ? (
+                    <div className="quiz-mode-selection">
+                      <p className="quiz-intro">
+                        {selectedPiece?.composer}의 "{selectedPiece?.title}"에 대한 퀴즈를 풀어보세요!
+                      </p>
+                      <div className="quiz-mode-buttons">
+                        <button
+                          className="quiz-mode-button"
+                          onClick={() => generateQuiz('short-answer')}
+                          disabled={isLoadingQuiz}
+                        >
+                          📝 단답형 퀴즈
+                          <span className="quiz-mode-desc">5문제</span>
+                        </button>
+                        <button
+                          className="quiz-mode-button"
+                          onClick={() => generateQuiz('ox')}
+                          disabled={isLoadingQuiz}
+                        >
+                          ✅ OX형 퀴즈
+                          <span className="quiz-mode-desc">5문제</span>
+                        </button>
+                      </div>
+                      {isLoadingQuiz && (
+                        <div className="loading-state">
+                          <span className="spinner"></span>
+                          <p>퀴즈 문제를 생성하는 중...</p>
+                        </div>
+                      )}
                     </div>
-                  ) : isLoadingTheory ? (
-                    <div className="loading-state">
-                      <span className="spinner"></span>
-                      <p>음악 이론 정보를 불러오는 중...</p>
+                  ) : isQuizComplete ? (
+                    <div className="quiz-result">
+                      <div className="quiz-score-display">
+                        <h3>퀴즈 완료! 🎉</h3>
+                        <div className="score-circle">
+                          <div className="score-number">{quizScore.correct}</div>
+                          <div className="score-total">/ {quizScore.total}</div>
+                        </div>
+                        <div className="score-percentage">
+                          {Math.round((quizScore.correct / quizScore.total) * 100)}점
+                        </div>
+                      </div>
+                      
+                      <div className="quiz-review">
+                        <h4>문제 리뷰</h4>
+                        {quizQuestions.map((q, index) => (
+                          <div key={index} className={`quiz-review-item ${q.isCorrect ? 'correct' : 'incorrect'}`}>
+                            <div className="review-question">
+                              <span className="question-number">Q{index + 1}.</span>
+                              {q.question}
+                            </div>
+                            <div className="review-answer">
+                              <div className="answer-section">
+                                <span className="answer-label">정답:</span>
+                                <span className="correct-answer">{q.answer}</span>
+                              </div>
+                              {q.userAnswer && (
+                                <div className="answer-section">
+                                  <span className="answer-label">내 답:</span>
+                                  <span className={`user-answer ${q.isCorrect ? 'correct' : 'incorrect'}`}>
+                                    {q.userAnswer}
+                                  </span>
+                                </div>
+                              )}
+                              <span className={`result-badge ${q.isCorrect ? 'correct' : 'incorrect'}`}>
+                                {q.isCorrect ? '✓ 정답!' : '✗ 오답'}
+                              </span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                      
+                      <div className="quiz-actions">
+                        <button className="restart-button" onClick={handleRestartQuiz}>
+                          🔄 다시 풀기
+                        </button>
+                        <button className="new-quiz-button" onClick={() => {
+                          setQuizMode('none')
+                          setQuizQuestions([])
+                          setCurrentQuestionIndex(0)
+                          setUserAnswer('')
+                          setQuizScore({ correct: 0, total: 0 })
+                          setIsQuizComplete(false)
+                        }}>
+                          📝 다른 퀴즈 풀기
+                        </button>
+                      </div>
+                    </div>
+                  ) : quizQuestions.length > 0 ? (
+                    <div className="quiz-container">
+                      <div className="quiz-progress">
+                        <div className="progress-bar">
+                          <div 
+                            className="progress-fill" 
+                            style={{ width: `${((currentQuestionIndex + 1) / quizQuestions.length) * 100}%` }}
+                          />
+                        </div>
+                        <span className="progress-text">
+                          {currentQuestionIndex + 1} / {quizQuestions.length}
+                        </span>
+                      </div>
+                      
+                      <div className="quiz-question-card">
+                        <div className="question-header">
+                          <span className="question-type-badge">
+                            {quizMode === 'ox' ? 'OX형' : '단답형'}
+                          </span>
+                          <span className="question-number-large">Q{currentQuestionIndex + 1}</span>
+                        </div>
+                        <div className="question-text">
+                          {quizQuestions[currentQuestionIndex].question}
+                        </div>
+                        
+                        {quizMode === 'ox' ? (
+                          <div className="ox-answers">
+                            <button
+                              className={`ox-button ${userAnswer === 'O' ? 'selected' : ''}`}
+                              onClick={() => setUserAnswer('O')}
+                            >
+                              O (맞음)
+                            </button>
+                            <button
+                              className={`ox-button ${userAnswer === 'X' ? 'selected' : ''}`}
+                              onClick={() => setUserAnswer('X')}
+                            >
+                              X (틀림)
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="short-answer-input">
+                            <input
+                              type="text"
+                              className="answer-input"
+                              placeholder="답을 입력하세요"
+                              value={userAnswer}
+                              onChange={(e) => setUserAnswer(e.target.value)}
+                              onKeyPress={(e) => {
+                                if (e.key === 'Enter') {
+                                  handleSubmitAnswer()
+                                }
+                              }}
+                            />
+                          </div>
+                        )}
+                        
+                        <button
+                          className="submit-answer-button"
+                          onClick={handleSubmitAnswer}
+                          disabled={!userAnswer.trim()}
+                        >
+                          {currentQuestionIndex < quizQuestions.length - 1 ? '다음 문제 →' : '제출하기 ✓'}
+                        </button>
+                      </div>
+                      
+                      <div className="quiz-score-mini">
+                        현재 점수: {quizScore.correct} / {currentQuestionIndex} {currentQuestionIndex > 0 ? `(${Math.round((quizScore.correct / currentQuestionIndex) * 100)}%)` : ''}
+                      </div>
                     </div>
                   ) : (
-                    <div className="activity-suggestions">
-                      <div className="activity-card">
-                        <h5>🎹 활동 1: 멜로디 따라 연주하기</h5>
-                        <p>피아노 건반에서 멜로디 음표를 순서대로 클릭하여 연주해보세요.</p>
-                        <ul>
-                          <li>음표를 하나씩 천천히 연주해보기</li>
-                          <li>리듬을 느끼며 연주하기</li>
-                          <li>멜로디의 흐름을 따라가기</li>
-                        </ul>
-                      </div>
-                      <div className="activity-card">
-                        <h5>🎵 활동 2: 화음 구성하기</h5>
-                        <p>각 마디의 화음을 피아노 건반에서 찾아 연주해보세요.</p>
-                        <ul>
-                          <li>화음의 구성음을 확인하기</li>
-                          <li>화음의 소리를 들어보기</li>
-                          <li>화음 진행의 변화를 느끼기</li>
-                        </ul>
-                      </div>
-                      <div className="activity-card">
-                        <h5>🎼 활동 3: 음악 감상하기</h5>
-                        <p>위의 YouTube 영상을 들으며 곡의 특징을 찾아보세요.</p>
-                        <ul>
-                          <li>곡의 분위기와 감정 느끼기</li>
-                          <li>멜로디와 화음이 어떻게 어울리는지 관찰하기</li>
-                          <li>리듬의 패턴 찾아보기</li>
-                        </ul>
-                      </div>
-                      <div className="activity-card">
-                        <h5>✏️ 활동 4: 작곡가와 곡 배경 알아보기</h5>
-                        <p>작곡가의 생애와 곡이 만들어진 배경을 조사해보세요.</p>
-                        <ul>
-                          <li>작곡가가 살았던 시대 알아보기</li>
-                          <li>곡의 제목과 의미 찾아보기</li>
-                          <li>다른 작품도 들어보기</li>
-                        </ul>
-                      </div>
+                    <div className="loading-state">
+                      <span className="spinner"></span>
+                      <p>퀴즈 문제를 생성하는 중...</p>
                     </div>
                   )}
                 </div>
               )}
             </div>
           </div>
+        </div>
+      )}
+
+      {searchMode === 'search' && (
+        <div className="search-section">
+          <div className="search-controls">
+            <div className="search-input-group">
+              <input
+                type="text"
+                className="search-input"
+                placeholder="곡 제목, 작곡가 이름 등을 검색하세요 (예: 베토벤 운명)"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                onKeyPress={(e) => {
+                  if (e.key === 'Enter') {
+                    handleSearchYouTube()
+                  }
+                }}
+              />
+              <button
+                className="search-button"
+                onClick={handleSearchYouTube}
+                disabled={isSearching}
+              >
+                {isSearching ? '검색 중...' : '🔍 검색'}
+              </button>
+            </div>
+            
+            <div className="url-input-group">
+              <input
+                type="text"
+                className="url-input"
+                placeholder="또는 YouTube URL을 직접 입력하세요"
+                onChange={(e) => {
+                  const url = e.target.value
+                  const videoId = extractVideoId(url)
+                  if (videoId) {
+                    setCustomYoutubeId(videoId)
+                  }
+                }}
+              />
+              <button
+                className="analyze-button"
+                onClick={() => {
+                  if (customYoutubeId) {
+                    handleAnalyzeCustomVideo(`https://www.youtube.com/watch?v=${customYoutubeId}`)
+                  } else {
+                    alert('YouTube URL을 입력해주세요.')
+                  }
+                }}
+                disabled={!customYoutubeId || isAnalyzing}
+              >
+                {isAnalyzing ? '분석 중...' : '🎵 분석하기'}
+              </button>
+            </div>
+          </div>
+
+          {error && (
+            <div className="error-message">
+              {error}
+            </div>
+          )}
+
+          {searchResults.length > 0 && (
+            <div className="search-results">
+              <h3>검색 결과</h3>
+              <div className="videos-grid">
+                {searchResults.map((video) => (
+                  <div
+                    key={video.videoId}
+                    className={`video-card ${selectedVideo?.videoId === video.videoId ? 'selected' : ''}`}
+                    onClick={() => {
+                      setSelectedVideo(video)
+                      setCustomYoutubeId(video.videoId)
+                    }}
+                  >
+                    {video.thumbnail && (
+                      <div className="video-thumbnail">
+                        <img src={video.thumbnail} alt={video.title} />
+                        <div className="play-overlay">▶</div>
+                      </div>
+                    )}
+                    <div className="video-info">
+                      <h4>{video.title}</h4>
+                      <p className="video-channel">{video.channel}</p>
+                      {video.viewCount && (
+                        <p className="video-views">
+                          조회수: {video.viewCount.toLocaleString()}회
+                        </p>
+                      )}
+                    </div>
+                    <button
+                      className="analyze-video-button"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        handleAnalyzeCustomVideo(video)
+                      }}
+                      disabled={isAnalyzing}
+                    >
+                      {isAnalyzing ? '분석 중...' : '🎵 분석하기'}
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {selectedVideo && (
+            <div className="selected-video-section">
+              <h3>선택된 영상</h3>
+              <div className="youtube-section">
+                <div className="youtube-embed">
+                  <iframe
+                    width="100%"
+                    height="400"
+                    src={`https://www.youtube.com/embed/${selectedVideo.videoId}?rel=0`}
+                    title={selectedVideo.title}
+                    frameBorder="0"
+                    allow="accelerometer; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                    allowFullScreen
+                    style={{ border: 'none', borderRadius: '8px' }}
+                  />
+                </div>
+              </div>
+            </div>
+          )}
+
+          {analysisResult && (
+            <div className="tabs-section">
+              <div className="tabs">
+                <button
+                  className={`tab ${activeSection === 'melody' ? 'active' : ''}`}
+                  onClick={() => setActiveSection('melody')}
+                >
+                  🎹 멜로디
+                </button>
+                <button
+                  className={`tab ${activeSection === 'chord' ? 'active' : ''}`}
+                  onClick={() => setActiveSection('chord')}
+                >
+                  🎵 화음
+                </button>
+              </div>
+
+              <div className="tab-content">
+                {activeSection === 'melody' && (
+                  <div className="melody-section">
+                    <h4>멜로디 분석</h4>
+                    {analysisResult.melody ? (
+                      <>
+                        <div className="melody-info">
+                          <p><strong>주요 멜로디 음표:</strong></p>
+                          <div className="melody-notes">
+                            {analysisResult.melody.map((note: string, i: number) => (
+                              <span key={i} className="note-badge">{note}</span>
+                            ))}
+                          </div>
+                        </div>
+                        <div className="piano-display">
+                          <h5>피아노 건반에서 멜로디 연주해보기</h5>
+                          <PianoKeyboard
+                            chordNotes={analysisResult.melody}
+                            chordName="주요 멜로디"
+                            interactive={true}
+                            octaves={[4, 5]}
+                          />
+                        </div>
+                      </>
+                    ) : (
+                      <div className="empty-state">
+                        <p>멜로디 정보를 불러올 수 없습니다.</p>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {activeSection === 'chord' && (
+                  <div className="chord-section">
+                    <h4>화음 분석</h4>
+                    {analysisResult.chordsInfo ? (
+                      <>
+                        <div className="chords-summary">
+                          <p><strong>사용된 화음:</strong></p>
+                          <div className="chords-list">
+                            {analysisResult.chords.map((chord: string, i: number) => (
+                              <span key={i} className="chord-badge">{chord}</span>
+                            ))}
+                          </div>
+                        </div>
+                        <div className="chords-progression">
+                          <h5>마디별 화음 진행</h5>
+                          {analysisResult.chordsInfo.map((chordInfo: any, index: number) => (
+                            <div key={index} className="chord-item">
+                              <PianoKeyboard
+                                chordNotes={chordInfo.notes || []}
+                                chordName={`마디 ${chordInfo.measure}: ${chordInfo.chord_name}`}
+                                interactive={true}
+                                octaves={[3, 4, 5]}
+                              />
+                            </div>
+                          ))}
+                        </div>
+                      </>
+                    ) : (
+                      <div className="empty-state">
+                        <p>화음 정보를 불러올 수 없습니다.</p>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>

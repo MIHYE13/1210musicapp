@@ -6,7 +6,13 @@ import PianoKeyboard from './PianoKeyboard'
 const NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
 const NOTE_NAMES_FLAT = ['C', 'Db', 'D', 'Eb', 'E', 'F', 'Gb', 'G', 'Ab', 'A', 'Bb', 'B']
 
-// 화음 타입
+// 화음 타입 및 표시 이름 (초등학생 수준: 장3화음, 단3화음만)
+const CHORD_OPTIONS: ChordOption[] = [
+  { type: 'major', name: 'major', intervals: [0, 4, 7], displayName: '장3화음 (Major)' },
+  { type: 'minor', name: 'minor', intervals: [0, 3, 7], displayName: '단3화음 (Minor)' },
+]
+
+// 화음 타입 (호환성 유지)
 const CHORD_TYPES: Record<string, number[]> = {
   'major': [0, 4, 7],
   'minor': [0, 3, 7],
@@ -21,121 +27,122 @@ const CHORD_TYPES: Record<string, number[]> = {
   'aug7': [0, 4, 8, 10],
 }
 
+interface ChordOption {
+  type: string
+  name: string
+  intervals: number[]
+  displayName: string
+}
+
 const ChordAnalysis = () => {
-  const [selectedNotes, setSelectedNotes] = useState<Set<string>>(new Set())
-  const [chordName, setChordName] = useState<string>('')
-  const [chordType, setChordType] = useState<string>('major')
+  const [rootNote, setRootNote] = useState<string>('') // 선택된 루트 음
+  const [selectedChordType, setSelectedChordType] = useState<string>('') // 선택된 화음 타입
+  const [chordNotes, setChordNotes] = useState<string[]>([]) // 생성된 화음 구성음
+  const [chordScore, setChordScore] = useState<Array<{ measure: number; chord: string; notes: string[] }>>([]) // 화음 악보
   const [octave, setOctave] = useState<number>(4)
 
-  // 선택된 음표를 화음 이름으로 변환
-  const analyzeChord = (notes: string[]): string => {
-    if (notes.length === 0) return ''
+  // 음표에서 루트 음 추출
+  const extractRootNote = (note: string): string => {
+    const match = note.match(/([A-G]#?b?)/)
+    return match ? match[1] : ''
+  }
+
+  // 루트 음과 화음 타입으로 구성음 생성
+  const generateChordNotes = (root: string, chordType: string, baseOctave: number): string[] => {
+    const rootMatch = root.match(/([A-G]#?b?)/)
+    if (!rootMatch) return []
     
-    // 음표를 MIDI 번호로 변환 (C4 = 60)
-    const midiNotes = notes
-      .map(note => {
-        const match = note.match(/([A-G]#?b?)(\d)/)
-        if (!match) return null
-        
-        const noteName = match[1]
-        const oct = parseInt(match[2])
-        
-        // 음표 이름을 인덱스로 변환
-        let noteIndex = NOTE_NAMES.findIndex(n => n === noteName || n === noteName.replace('b', '#'))
-        if (noteIndex === -1) {
-          // 플랫 처리
-          const flatIndex = NOTE_NAMES_FLAT.findIndex(n => n === noteName)
-          if (flatIndex !== -1) {
-            noteIndex = flatIndex
-          }
-        }
-        
-        if (noteIndex === -1) return null
-        
-        return (oct - 4) * 12 + noteIndex + 60
-      })
-      .filter((n): n is number => n !== null)
-      .sort((a, b) => a - b)
+    const rootName = rootMatch[1]
+    const rootIndex = NOTE_NAMES.findIndex(n => n === rootName || n === rootName.replace('b', '#'))
+    if (rootIndex === -1) return []
     
-    if (midiNotes.length === 0) return ''
+    const chordOption = CHORD_OPTIONS.find(opt => opt.type === chordType)
+    if (!chordOption) return []
     
-    // 루트 음 찾기 (가장 낮은 음)
-    const rootMidi = midiNotes[0]
-    const rootNote = NOTE_NAMES[rootMidi % 12]
+    return chordOption.intervals.map(interval => {
+      const noteIndex = (rootIndex + interval) % 12
+      const noteName = NOTE_NAMES[noteIndex]
+      // 옥타브 계산 (interval이 12를 넘으면 다음 옥타브)
+      const noteOctave = baseOctave + Math.floor((rootIndex + interval) / 12)
+      return `${noteName}${noteOctave}`
+    })
+  }
+
+  // 화음 이름 생성
+  const getChordName = (root: string, chordType: string): string => {
+    const rootName = extractRootNote(root)
+    const chordOption = CHORD_OPTIONS.find(opt => opt.type === chordType)
+    if (!chordOption) return rootName
     
-    // 다른 음들과의 간격 계산
-    const intervals = midiNotes.map(n => n - rootMidi)
+    if (chordType === 'major') {
+      return rootName
+    } else if (chordType === 'minor') {
+      return `${rootName}m`
+    } else {
+      return `${rootName}${chordType}`
+    }
+  }
+
+  // 건반 클릭 핸들러 - 루트 음 선택
+  const handleKeyClick = (note: string) => {
+    const root = extractRootNote(note)
+    const noteOctave = parseInt(note.match(/\d/)?.[0] || '4')
     
-    // 화음 타입 매칭
-    for (const [type, pattern] of Object.entries(CHORD_TYPES)) {
-      if (intervals.length === pattern.length) {
-        const matches = pattern.every(p => intervals.includes(p))
-        if (matches) {
-          if (type === 'major') {
-            return rootNote
-          } else if (type === 'minor') {
-            return `${rootNote}m`
-          } else {
-            return `${rootNote}${type}`
-          }
-        }
-      }
+    setRootNote(note)
+    setSelectedChordType('') // 화음 타입 초기화
+    setChordNotes([])
+    setOctave(noteOctave)
+  }
+
+  // 화음 타입 선택 핸들러
+  const handleChordTypeSelect = (chordType: string) => {
+    if (!rootNote) return
+    
+    setSelectedChordType(chordType)
+    const notes = generateChordNotes(rootNote, chordType, octave)
+    setChordNotes(notes)
+  }
+
+  // 화음을 악보에 추가
+  const handleAddToScore = () => {
+    if (!rootNote || !selectedChordType || chordNotes.length === 0) return
+    
+    const chordName = getChordName(rootNote, selectedChordType)
+    const newMeasure = {
+      measure: chordScore.length + 1,
+      chord: chordName,
+      notes: chordNotes
     }
     
-    // 정확히 매칭되지 않으면 선택된 음표 표시
-    return notes.join(' ')
+    setChordScore([...chordScore, newMeasure])
   }
 
-  const handleKeyClick = (note: string) => {
-    setSelectedNotes(prev => {
-      const newSet = new Set(prev)
-      if (newSet.has(note)) {
-        newSet.delete(note)
-      } else {
-        newSet.add(note)
-      }
-      
-      // 화음 분석
-      const notesArray = Array.from(newSet)
-      const analyzed = analyzeChord(notesArray)
-      setChordName(analyzed)
-      
-      return newSet
-    })
+  // 악보 초기화
+  const handleClearScore = () => {
+    setChordScore([])
   }
 
-  const handleClear = () => {
-    setSelectedNotes(new Set())
-    setChordName('')
+  // 개별 마디 삭제
+  const handleDeleteMeasure = (index: number) => {
+    setChordScore(chordScore.filter((_, i) => i !== index).map((m, i) => ({ ...m, measure: i + 1 })))
   }
 
-  const handleBuildChord = () => {
-    // 선택된 화음 타입으로 음표 구성
-    const rootNote = NOTE_NAMES[0] // C를 기본으로
-    const pattern = CHORD_TYPES[chordType] || CHORD_TYPES['major']
-    
-    const chordNotes = pattern.map(interval => {
-      const noteIndex = interval % 12
-      const noteName = NOTE_NAMES[noteIndex]
-      return `${noteName}${octave}`
-    })
-    
-    setSelectedNotes(new Set(chordNotes))
-    setChordName(analyzeChord(chordNotes))
+  // 사용 가능한 화음 옵션 가져오기
+  const getAvailableChords = (): ChordOption[] => {
+    return CHORD_OPTIONS
   }
-
-  const selectedNotesArray = Array.from(selectedNotes)
 
   return (
     <div className="chord-analysis">
       <h2>🎹 화음 구성하기</h2>
+      <p className="subtitle">피아노 건반을 클릭하면 해당 음을 기반으로 연주할 수 있는 화음형이 표시됩니다!</p>
       
       <div className="chord-builder-section">
         <div className="piano-section">
-          <h3>피아노 건반을 클릭하여 화음을 만들어보세요!</h3>
+          <h3>1️⃣ 피아노 건반을 클릭하세요</h3>
           <PianoKeyboard
-            chordNotes={selectedNotesArray}
-            chordName={chordName || '화음을 구성해주세요'}
+            chordNotes={chordNotes}
+            chordName={rootNote ? `${extractRootNote(rootNote)} 음을 기반으로 화음을 선택하세요` : '건반을 클릭하여 루트 음을 선택하세요'}
             interactive={true}
             octaves={[3, 4, 5]}
             onKeyClick={handleKeyClick}
@@ -143,79 +150,104 @@ const ChordAnalysis = () => {
         </div>
 
         <div className="chord-controls">
-          <div className="control-group">
-            <h3>선택된 음표</h3>
-            {selectedNotesArray.length > 0 ? (
-              <div className="selected-notes">
-                {selectedNotesArray.map((note, i) => (
-                  <span key={i} className="note-badge">{note}</span>
-                ))}
+          {rootNote && (
+            <>
+              <div className="control-group">
+                <h3>2️⃣ 선택된 루트 음</h3>
+                <div className="selected-root">
+                  <span className="root-badge">{extractRootNote(rootNote)}</span>
+                  <span className="root-octave">옥타브 {octave}</span>
+                </div>
               </div>
-            ) : (
-              <p className="hint">건반을 클릭하여 음표를 선택하세요</p>
-            )}
-          </div>
 
-          {chordName && (
-            <div className="chord-result">
-              <h3>인식된 화음</h3>
-              <div className="chord-name-display">{chordName}</div>
-            </div>
+              <div className="control-group">
+                <h3>3️⃣ 화음 타입 선택</h3>
+                <div className="chord-options-grid">
+                  {getAvailableChords().map((chordOption) => (
+                    <button
+                      key={chordOption.type}
+                      className={`chord-option-button ${selectedChordType === chordOption.type ? 'active' : ''}`}
+                      onClick={() => handleChordTypeSelect(chordOption.type)}
+                    >
+                      {chordOption.displayName}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {selectedChordType && chordNotes.length > 0 && (
+                <div className="control-group">
+                  <h3>4️⃣ 생성된 화음</h3>
+                  <div className="chord-result">
+                    <div className="chord-name-display">
+                      {getChordName(rootNote, selectedChordType)}
+                    </div>
+                    <div className="chord-notes-display">
+                      <p><strong>구성음:</strong></p>
+                      <div className="selected-notes">
+                        {chordNotes.map((note, i) => (
+                          <span key={i} className="note-badge">{note}</span>
+                        ))}
+                      </div>
+                    </div>
+                    <button 
+                      className="action-button" 
+                      onClick={handleAddToScore}
+                      style={{ marginTop: '1rem' }}
+                    >
+                      ➕ 악보에 추가하기
+                    </button>
+                  </div>
+                </div>
+              )}
+            </>
           )}
 
-          <div className="control-group">
-            <h3>빠른 화음 구성</h3>
-            <div className="chord-builder-controls">
-              <select
-                className="form-control"
-                value={chordType}
-                onChange={(e) => setChordType(e.target.value)}
-              >
-                <option value="major">장3화음 (Major)</option>
-                <option value="minor">단3화음 (Minor)</option>
-                <option value="diminished">감3화음 (Diminished)</option>
-                <option value="augmented">증3화음 (Augmented)</option>
-                <option value="sus2">서스2 (Sus2)</option>
-                <option value="sus4">서스4 (Sus4)</option>
-                <option value="7">7화음 (Dominant 7th)</option>
-                <option value="maj7">장7화음 (Major 7th)</option>
-                <option value="m7">단7화음 (Minor 7th)</option>
-                <option value="dim7">감7화음 (Diminished 7th)</option>
-              </select>
-              
-              <select
-                className="form-control"
-                value={octave}
-                onChange={(e) => setOctave(parseInt(e.target.value))}
-              >
-                <option value={3}>3옥타브</option>
-                <option value={4}>4옥타브</option>
-                <option value={5}>5옥타브</option>
-              </select>
-              
-              <button className="action-button" onClick={handleBuildChord}>
-                🎵 화음 구성하기
-              </button>
+          {!rootNote && (
+            <div className="control-group">
+              <p className="hint">💡 피아노 건반을 클릭하여 루트 음을 선택하세요!</p>
             </div>
-          </div>
-
-          <div className="control-group">
-            <button className="secondary-button" onClick={handleClear}>
-              🗑️ 모두 지우기
-            </button>
-          </div>
+          )}
         </div>
       </div>
 
-      {chordName && (
-        <div className="chord-info-section">
-          <h3>📚 화음 정보</h3>
-          <div className="info-box">
-            <p><strong>화음 이름:</strong> {chordName}</p>
-            <p><strong>구성음:</strong> {selectedNotesArray.join(', ')}</p>
-            <p className="hint">
-              💡 이 화음을 사용하여 곡을 연주하거나, 다른 화음과 조합하여 화음 진행을 만들어보세요!
-            </p>
+      {chordScore.length > 0 && (
+        <div className="chord-score-section">
+          <div className="score-header">
+            <h3>📜 화음 악보</h3>
+            <button className="secondary-button" onClick={handleClearScore}>
+              🗑️ 악보 초기화
+            </button>
+          </div>
+          <div className="score-measures">
+            {chordScore.map((measure, index) => (
+              <div key={index} className="score-measure">
+                <div className="measure-header">
+                  <span className="measure-number">마디 {measure.measure}</span>
+                  <span className="chord-label">{measure.chord}</span>
+                  <button
+                    className="delete-measure-btn"
+                    onClick={() => handleDeleteMeasure(index)}
+                    title="마디 삭제"
+                  >
+                    ✕
+                  </button>
+                </div>
+                <div className="measure-content">
+                  <PianoKeyboard
+                    chordNotes={measure.notes}
+                    chordName={measure.chord}
+                    interactive={false}
+                    octaves={[3, 4, 5]}
+                  />
+                  <div className="chord-notes-list">
+                    {measure.notes.map((note, i) => (
+                      <span key={i} className="note-badge-small">{note}</span>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       )}
