@@ -15,7 +15,45 @@ import re
 import requests
 import subprocess
 import os
+import shutil
 from pathlib import Path
+
+def get_ffmpeg_path() -> Optional[str]:
+    """
+    FFmpeg 경로 찾기
+    1. 환경 변수 FFMPEG_PATH 확인
+    2. 일반적인 설치 경로 확인
+    3. PATH에서 ffmpeg 찾기
+    
+    Returns:
+        FFmpeg bin 디렉토리 경로 또는 None
+    """
+    # 1. 환경 변수에서 확인
+    ffmpeg_path = os.getenv("FFMPEG_PATH")
+    if ffmpeg_path:
+        ffmpeg_bin = Path(ffmpeg_path) / "bin"
+        if (ffmpeg_bin / "ffmpeg.exe").exists() or (ffmpeg_bin / "ffmpeg").exists():
+            return str(ffmpeg_bin)
+    
+    # 2. 일반적인 Windows 경로 확인
+    common_paths = [
+        r"C:\ffmpeg\bin",
+        r"C:\Program Files\ffmpeg\bin",
+        r"C:\Program Files (x86)\ffmpeg\bin",
+    ]
+    
+    for path_str in common_paths:
+        path = Path(path_str)
+        if (path / "ffmpeg.exe").exists():
+            return str(path)
+    
+    # 3. PATH에서 ffmpeg 찾기
+    ffmpeg_exe = shutil.which("ffmpeg")
+    if ffmpeg_exe:
+        ffmpeg_path = Path(ffmpeg_exe).parent
+        return str(ffmpeg_path)
+    
+    return None
 
 class YouTubeDownloader:
     """Download audio from YouTube videos"""
@@ -69,8 +107,8 @@ class YouTubeDownloader:
                 return None
             
             ydl_opts = {
-                'quiet': True,
-                'no_warnings': True,
+                "quiet": True,
+                "no_warnings": True,
             }
             
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
@@ -124,16 +162,24 @@ class YouTubeDownloader:
             
             # yt-dlp 옵션 설정
             ydl_opts = {
-                'format': 'bestaudio/best',
-                'outtmpl': str(output_path.with_suffix('')) + '.%(ext)s',
-                'postprocessors': [{
-                    'key': 'FFmpegExtractAudio',
-                    'preferredcodec': 'mp3',
-                    'preferredquality': '192',
+                "format": "bestaudio/best",
+                "outtmpl": str(output_path.with_suffix('')) + '.%(ext)s',
+                "postprocessors": [{
+                    "key": "FFmpegExtractAudio",
+                    "preferredcodec": "mp3",
+                    "preferredquality": "192",
                 }],
-                'quiet': True,
-                'no_warnings': True,
+                "quiet": True,
+                "no_warnings": True,
             }
+            
+            # FFmpeg 경로 설정 (있는 경우)
+            ffmpeg_path = get_ffmpeg_path()
+            if ffmpeg_path:
+                ydl_opts["ffmpeg_location"] = ffmpeg_path
+                print(f"[INFO] FFmpeg 경로 설정: {ffmpeg_path}")
+            else:
+                print("[WARN] FFmpeg 경로를 찾을 수 없습니다. PATH에 ffmpeg가 있는지 확인하세요.")
             
             # YouTube 오디오 다운로드
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
@@ -152,7 +198,6 @@ class YouTubeDownloader:
                     # MP3가 아니면 변환 필요
                     if path.suffix != '.mp3':
                         # FFmpeg로 변환 (있는 경우)
-                        import shutil
                         if shutil.which('ffmpeg'):
                             import subprocess
                             subprocess.run([

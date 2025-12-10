@@ -28,6 +28,7 @@ except ImportError:
 from typing import Optional
 import tempfile
 import os
+from pathlib import Path
 
 class AudioProcessor:
     """Process audio files and convert to musical notation"""
@@ -435,3 +436,153 @@ class AudioProcessor:
             
         except Exception as e:
             return {'error': str(e)}
+    
+    def download_youtube_audio(self, youtube_url: str, output_path: Optional[str] = None) -> Optional[str]:
+        """
+        Download audio from YouTube and convert to MP3 using yt-dlp
+        
+        Args:
+            youtube_url: YouTube video URL
+            output_path: Optional output file path (if None, uses temp file)
+            
+        Returns:
+            Path to downloaded MP3 file or None if failed
+        """
+        try:
+            # Import yt-dlp
+            try:
+                import yt_dlp
+            except ImportError:
+                error_msg = "yt-dlp가 설치되지 않았습니다. pip install yt-dlp를 실행해주세요."
+                if HAS_STREAMLIT and st:
+                    st.error(error_msg)
+                else:
+                    print(f"[ERROR] {error_msg}")
+                raise ImportError(error_msg)
+            
+            # FFmpeg 경로 확인
+            FFMPEG_PATH = r"C:\ffmpeg\bin"
+            ffmpeg_bin_path = Path(FFMPEG_PATH)
+            
+            # FFmpeg 존재 여부 확인
+            ffmpeg_exists = (ffmpeg_bin_path / "ffmpeg.exe").exists() or (ffmpeg_bin_path / "ffmpeg").exists()
+            
+            if not ffmpeg_exists:
+                # 환경 변수나 PATH에서도 확인
+                import shutil
+                ffmpeg_exe = shutil.which("ffmpeg")
+                if ffmpeg_exe:
+                    ffmpeg_bin_path = Path(ffmpeg_exe).parent
+                    ffmpeg_exists = True
+                else:
+                    error_msg = (
+                        f"FFmpeg를 찾을 수 없습니다.\n\n"
+                        f"FFmpeg 설치 방법:\n"
+                        f"1. FFmpeg를 다운로드: https://ffmpeg.org/download.html\n"
+                        f"2. C:\\ffmpeg\\bin 폴더에 ffmpeg.exe와 ffprobe.exe를 설치하세요.\n"
+                        f"3. 또는 시스템 PATH에 FFmpeg를 추가하세요.\n\n"
+                        f"현재 확인한 경로: {FFMPEG_PATH}"
+                    )
+                    if HAS_STREAMLIT and st:
+                        st.error(error_msg)
+                    else:
+                        print(f"[ERROR] {error_msg}")
+                    raise FileNotFoundError("FFmpeg를 찾을 수 없습니다. FFmpeg를 설치해주세요.")
+            
+            # 출력 경로 설정
+            if output_path is None:
+                output_file = tempfile.NamedTemporaryFile(delete=False, suffix=".mp3")
+                output_path = output_file.name
+                output_file.close()
+            
+            base_path = str(Path(output_path).with_suffix(''))
+            
+            # yt-dlp 옵션 설정
+            ydl_opts = {
+                "format": "bestaudio/best",
+                "outtmpl": base_path + '.%(ext)s',
+                "ffmpeg_location": str(ffmpeg_bin_path),
+                "postprocessors": [{
+                    "key": "FFmpegExtractAudio",
+                    "preferredcodec": "mp3",
+                    "preferredquality": "192",
+                }],
+                "quiet": True,
+                "no_warnings": True,
+            }
+            
+            print(f"[INFO] YouTube 오디오 다운로드 시작: {youtube_url}")
+            print(f"[INFO] FFmpeg 경로: {ffmpeg_bin_path}")
+            
+            # YouTube 오디오 다운로드
+            try:
+                with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                    ydl.download([youtube_url])
+            except Exception as e:
+                error_msg = (
+                    f"YouTube 오디오 다운로드 실패: {str(e)}\n\n"
+                    f"가능한 원인:\n"
+                    f"1. YouTube URL이 유효하지 않습니다.\n"
+                    f"2. 네트워크 연결 문제가 있습니다.\n"
+                    f"3. FFmpeg 경로가 올바르지 않습니다: {ffmpeg_bin_path}\n"
+                    f"4. FFmpeg가 제대로 설치되지 않았습니다."
+                )
+                if HAS_STREAMLIT and st:
+                    st.error(error_msg)
+                else:
+                    print(f"[ERROR] {error_msg}")
+                raise
+            
+            # 다운로드된 파일 찾기
+            possible_paths = [
+                base_path + '.mp3',
+                output_path,
+                base_path + '.m4a',
+                base_path + '.webm',
+                base_path + '.opus',
+            ]
+            
+            for path_str in possible_paths:
+                path = Path(path_str)
+                if path.exists():
+                    # MP3가 아니면 변환 필요 (이미 yt-dlp가 처리했을 가능성이 높음)
+                    if path.suffix != '.mp3' and path_str != output_path:
+                        # MP3로 변환 시도
+                        import shutil
+                        if shutil.which('ffmpeg') or ffmpeg_exists:
+                            import subprocess
+                            mp3_path = Path(output_path)
+                            try:
+                                subprocess.run([
+                                    str(ffmpeg_bin_path / "ffmpeg.exe") if (ffmpeg_bin_path / "ffmpeg.exe").exists() else "ffmpeg",
+                                    '-i', str(path),
+                                    '-acodec', 'libmp3lame', '-ab', '192k',
+                                    str(mp3_path), '-y'
+                                ], check=True, capture_output=True, timeout=60)
+                                if mp3_path.exists():
+                                    path.unlink()  # 원본 파일 삭제
+                                    return str(mp3_path)
+                            except Exception as conv_e:
+                                print(f"[WARN] MP3 변환 실패: {conv_e}")
+                    return str(path)
+            
+            error_msg = "다운로드는 완료되었지만 파일을 찾을 수 없습니다."
+            if HAS_STREAMLIT and st:
+                st.error(error_msg)
+            else:
+                print(f"[ERROR] {error_msg}")
+            return None
+            
+        except ImportError:
+            raise  # yt-dlp import 오류는 그대로 전달
+        except FileNotFoundError:
+            raise  # FFmpeg 오류는 그대로 전달
+        except Exception as e:
+            error_msg = f"YouTube 오디오 다운로드 중 예상치 못한 오류: {str(e)}"
+            if HAS_STREAMLIT and st:
+                st.error(error_msg)
+            else:
+                print(f"[ERROR] {error_msg}")
+            import traceback
+            traceback.print_exc()
+            raise

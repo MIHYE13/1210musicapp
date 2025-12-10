@@ -103,6 +103,37 @@ except Exception as e:
     HAS_AUDIO_PROCESSOR = False
     AudioProcessor = None
 
+# 필수 라이브러리 체크 함수
+def check_required_libraries():
+    """필수 라이브러리 설치 여부 확인"""
+    missing_libs = []
+    
+    try:
+        import numpy
+    except ImportError:
+        missing_libs.append({
+            "name": "numpy",
+            "install": "pip install numpy"
+        })
+    
+    try:
+        import soundfile
+    except ImportError:
+        missing_libs.append({
+            "name": "soundfile",
+            "install": "pip install soundfile"
+        })
+    
+    try:
+        import music21
+    except ImportError:
+        missing_libs.append({
+            "name": "music21",
+            "install": "pip install music21"
+        })
+    
+    return missing_libs
+
 try:
     # Ensure src directory is in path
     src_dir = Path(__file__).parent
@@ -249,7 +280,12 @@ async def global_exception_handler(request, exc):
     )
 
 # Initialize processors (singleton pattern) with error handling
-audio_processor = AudioProcessor() if HAS_AUDIO_PROCESSOR else None
+try:
+    audio_processor = AudioProcessor() if HAS_AUDIO_PROCESSOR else None
+except (ImportError, Exception) as e:
+    print(f"[WARN] AudioProcessor 초기화 실패: {e}")
+    print("[WARN] 서버는 계속 실행되지만 오디오 처리 기능은 사용할 수 없습니다.")
+    audio_processor = None
 score_processor = ScoreProcessor() if HAS_SCORE_PROCESSOR else None
 chord_generator = ChordGenerator() if HAS_CHORD_GENERATOR else None
 ai_assistant = AIAssistant() if HAS_AI_ASSISTANT else None
@@ -384,7 +420,35 @@ async def process_audio(file: UploadFile = File(...)):
             
             # 오디오 처리 모듈 확인
             if not HAS_AUDIO_PROCESSOR or not audio_processor:
-                raise HTTPException(status_code=503, detail="Audio Processor 모듈을 사용할 수 없습니다.")
+                # 필수 라이브러리 체크
+                missing_libs = check_required_libraries()
+                if missing_libs:
+                    lib_names = [lib["name"] for lib in missing_libs]
+                    install_commands = [lib["install"] for lib in missing_libs]
+                    
+                    return JSONResponse(
+                        status_code=503,
+                        content={
+                            "success": False,
+                            "error": "필수 라이브러리 미설치 / Required Libraries Not Installed",
+                            "message_ko": f"오디오 처리를 위해 다음 라이브러리가 필요합니다: {', '.join(lib_names)}",
+                            "message_en": f"The following libraries are required for audio processing: {', '.join(lib_names)}",
+                            "missing_libraries": missing_libs,
+                            "install_commands": install_commands,
+                            "detail_ko": "서버는 실행 중이지만 오디오 처리 기능을 사용할 수 없습니다. 위의 설치 명령어를 실행한 후 서버를 재시작해주세요.",
+                            "detail_en": "The server is running but audio processing is unavailable. Please install the required libraries and restart the server."
+                        }
+                    )
+                else:
+                    return JSONResponse(
+                        status_code=503,
+                        content={
+                            "success": False,
+                            "error": "Audio Processor 모듈을 사용할 수 없습니다 / Audio Processor module unavailable",
+                            "message_ko": "오디오 처리 모듈을 사용할 수 없습니다.",
+                            "message_en": "Audio processor module is not available."
+                        }
+                    )
             
             # 오디오 처리 (비동기로 실행하여 타임아웃 방지)
             import asyncio
@@ -407,6 +471,31 @@ async def process_audio(file: UploadFile = File(...)):
                     status_code=504,
                     detail="오디오 처리 시간이 초과되었습니다. 파일이 너무 크거나 복잡할 수 있습니다. 더 짧은 오디오 파일을 시도해주세요."
                 )
+            except ImportError as e:
+                # 라이브러리 import 오류인 경우
+                missing_libs = check_required_libraries()
+                if missing_libs:
+                    lib_names = [lib["name"] for lib in missing_libs]
+                    install_commands = [lib["install"] for lib in missing_libs]
+                    
+                    return JSONResponse(
+                        status_code=503,
+                        content={
+                            "success": False,
+                            "error": "필수 라이브러리 미설치 / Required Libraries Not Installed",
+                            "message_ko": f"오디오 처리를 위해 다음 라이브러리가 필요합니다: {', '.join(lib_names)}",
+                            "message_en": f"The following libraries are required for audio processing: {', '.join(lib_names)}",
+                            "missing_libraries": missing_libs,
+                            "install_commands": install_commands,
+                            "detail_ko": "서버는 실행 중이지만 오디오 처리 기능을 사용할 수 없습니다. 위의 설치 명령어를 실행한 후 서버를 재시작해주세요.",
+                            "detail_en": "The server is running but audio processing is unavailable. Please install the required libraries and restart the server."
+                        }
+                    )
+                else:
+                    raise HTTPException(
+                        status_code=500,
+                        detail=f"라이브러리 import 오류: {str(e)}"
+                    )
             except Exception as e:
                 import traceback
                 error_detail = f"오디오 처리 중 오류 발생: {str(e)}"
@@ -1667,18 +1756,57 @@ async def analyze_chord_youtube(request: dict):
         temp_audio_path = tempfile.NamedTemporaryFile(delete=False, suffix=".mp3").name
         base_path = temp_audio_path.replace('.mp3', '')
         
+        # FFmpeg 경로 찾기
+        def get_ffmpeg_path() -> Optional[str]:
+            """FFmpeg 경로 찾기"""
+            import shutil
+            # 1. 환경 변수에서 확인
+            ffmpeg_path = os.getenv("FFMPEG_PATH")
+            if ffmpeg_path:
+                ffmpeg_bin = Path(ffmpeg_path) / "bin"
+                if (ffmpeg_bin / "ffmpeg.exe").exists() or (ffmpeg_bin / "ffmpeg").exists():
+                    return str(ffmpeg_bin)
+            
+            # 2. 일반적인 Windows 경로 확인
+            common_paths = [
+                r"C:\ffmpeg\bin",
+                r"C:\Program Files\ffmpeg\bin",
+                r"C:\Program Files (x86)\ffmpeg\bin",
+            ]
+            
+            for path_str in common_paths:
+                path = Path(path_str)
+                if (path / "ffmpeg.exe").exists():
+                    return str(path)
+            
+            # 3. PATH에서 ffmpeg 찾기
+            ffmpeg_exe = shutil.which("ffmpeg")
+            if ffmpeg_exe:
+                ffmpeg_path = Path(ffmpeg_exe).parent
+                return str(ffmpeg_path)
+            
+            return None
+        
         # yt-dlp 옵션 설정
         ydl_opts = {
-            'format': 'bestaudio/best',
-            'outtmpl': base_path + '.%(ext)s',
-            'postprocessors': [{
-                'key': 'FFmpegExtractAudio',
-                'preferredcodec': 'mp3',
-                'preferredquality': '192',
+            "format": "bestaudio/best",
+            "outtmpl": base_path + '.%(ext)s',
+            "postprocessors": [{
+                "key": "FFmpegExtractAudio",
+                "preferredcodec": "mp3",
+                "preferredquality": "192",
             }],
-            'quiet': True,
-            'no_warnings': True,
+            "quiet": True,
+            "no_warnings": True,
         }
+        
+        # FFmpeg 경로 설정 (있는 경우)
+        ffmpeg_path = get_ffmpeg_path()
+        if ffmpeg_path:
+            ydl_opts["ffmpeg_location"] = ffmpeg_path
+            print(f"[INFO] FFmpeg 경로 설정: {ffmpeg_path}")
+        else:
+            print("[WARN] FFmpeg 경로를 찾을 수 없습니다. PATH에 ffmpeg가 있는지 확인하세요.")
         
         # YouTube 오디오 다운로드
         try:
