@@ -428,11 +428,29 @@ async def get_api_keys_status():
         })
     
     if HAS_PERPLEXITY_ASSISTANT and perplexity_assistant:
-        statuses.append({
-            "name": "Perplexity",
-            "status": "valid" if perplexity_assistant.api_key else "not_set",
-            "message": "정상" if perplexity_assistant.api_key else "API 키가 설정되지 않았습니다"
-        })
+        # API 키 유효성 검증
+        if perplexity_assistant.api_key:
+            # 실제 API 호출로 검증
+            validation_result = perplexity_assistant.validate_api_key()
+            if validation_result.get("valid"):
+                statuses.append({
+                    "name": "Perplexity",
+                    "status": "valid",
+                    "message": validation_result.get("message", "정상")
+                })
+            else:
+                statuses.append({
+                    "name": "Perplexity",
+                    "status": "invalid",
+                    "message": validation_result.get("message", "API 키가 유효하지 않습니다"),
+                    "error": validation_result.get("error")
+                })
+        else:
+            statuses.append({
+                "name": "Perplexity",
+                "status": "not_set",
+                "message": "API 키가 설정되지 않았습니다"
+            })
     else:
         statuses.append({
             "name": "Perplexity",
@@ -1671,10 +1689,20 @@ async def export_lesson_plan_docx(request: dict, background_tasks: BackgroundTas
 # ==================== Perplexity ====================
 
 @app.post("/api/perplexity/search")
-async def perplexity_search(request: dict):
+async def perplexity_search(request: Request):
     """Perplexity 검색 - 즉시 응답 제공"""
-    query = request.get("query")
-    search_type = request.get("searchType", "음악 이론 조사")
+    try:
+        body = await request.json()
+        query = body.get("query")
+        search_type = body.get("searchType", "음악 이론 조사")
+    except Exception as e:
+        return JSONResponse(
+            status_code=400,
+            content={
+                "success": False,
+                "error": f"요청 데이터 파싱 오류: {str(e)}"
+            }
+        )
     
     if not query:
         return JSONResponse(
@@ -1809,6 +1837,39 @@ async def youtube_search(request: Request):
         print(f"[ERROR] YouTube 검색 오류: {str(e)}")
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"YouTube 검색 오류: {str(e)}")
+
+@app.post("/api/youtube/video-info")
+async def get_youtube_video_info(request: Request):
+    """YouTube 영상 정보 가져오기 (뷰 수 확인용)"""
+    try:
+        body = await request.json()
+        video_id = body.get("videoId") or body.get("video_id")
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"요청 데이터 파싱 오류: {str(e)}")
+    
+    if not video_id:
+        raise HTTPException(status_code=400, detail="영상 ID를 입력해주세요.")
+    
+    if not HAS_YOUTUBE_HELPER or not youtube_helper:
+        raise HTTPException(status_code=503, detail="YouTube Helper 모듈을 사용할 수 없습니다.")
+    
+    try:
+        video_info = youtube_helper.get_video_info(video_id)
+        
+        if not video_info:
+            raise HTTPException(status_code=404, detail="영상을 찾을 수 없습니다.")
+        
+        return {
+            "success": True,
+            "video": video_info
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        import traceback
+        print(f"[ERROR] YouTube 영상 정보 가져오기 오류: {str(e)}")
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"YouTube 영상 정보 가져오기 오류: {str(e)}")
 
 # ==================== Chord Analysis ====================
 

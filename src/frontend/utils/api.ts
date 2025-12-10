@@ -244,10 +244,16 @@ export const perplexityApi = {
 }
 
 export const youtubeApi = {
-  search: (query: string, maxResults: number = 5) =>
+  search: (query: string, maxResults: number = 5, minViews: number = 100000) =>
     apiClient.request('/youtube/search', {
       method: 'POST',
-      body: JSON.stringify({ query, maxResults }),
+      body: JSON.stringify({ query, maxResults, minViews }),
+    }),
+  
+  getVideoInfo: (videoId: string) =>
+    apiClient.request('/youtube/video-info', {
+      method: 'POST',
+      body: JSON.stringify({ videoId }),
     }),
 }
 

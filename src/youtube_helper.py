@@ -386,6 +386,61 @@ class YouTubeHelper:
         
         return recommendations
     
+    def get_video_info(self, video_id: str) -> Optional[Dict]:
+        """
+        Get video information by video ID
+        
+        Args:
+            video_id: YouTube video ID
+            
+        Returns:
+            Video information dictionary with view count, or None if not found
+        """
+        if not self.api_key:
+            return None
+        
+        try:
+            params = {
+                "part": "snippet,statistics",
+                "id": video_id,
+                "key": self.api_key
+            }
+            
+            response = requests.get(
+                f"{self.base_url}/videos",
+                params=params,
+                timeout=10
+            )
+            
+            if response.status_code != 200:
+                return None
+            
+            data = response.json()
+            items = data.get('items', [])
+            
+            if not items:
+                return None
+            
+            item = items[0]
+            view_count = int(item.get('statistics', {}).get('viewCount', 0))
+            
+            return {
+                "video_id": video_id,
+                "title": item['snippet']['title'],
+                "description": item['snippet']['description'],
+                "url": f"https://www.youtube.com/watch?v={video_id}",
+                "thumbnail": item['snippet']['thumbnails']['medium']['url'],
+                "channel": item['snippet']['channelTitle'],
+                "published_at": item['snippet']['publishedAt'][:10],
+                "view_count": view_count
+            }
+        except Exception as e:
+            if HAS_STREAMLIT and st:
+                st.warning(f"영상 정보 가져오기 오류: {str(e)}")
+            else:
+                print(f"영상 정보 가져오기 오류: {str(e)}")
+            return None
+    
     def get_video_embed_html(self, video_id: str, width: int = 560, 
                             height: int = 315) -> str:
         """

@@ -3,8 +3,9 @@ import './ApiKeyStatus.css'
 
 interface ApiStatus {
   name: string
-  status: 'checking' | 'valid' | 'invalid' | 'not_set'
+  status: 'checking' | 'valid' | 'invalid' | 'not_set' | 'not_available'
   message: string
+  error?: string
 }
 
 const ApiKeyStatus = () => {

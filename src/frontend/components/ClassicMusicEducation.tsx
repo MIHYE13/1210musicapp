@@ -476,6 +476,8 @@ const ClassicMusicEducation = () => {
   // const [musicTheory, setMusicTheory] = useState<string>('')
   // const [isLoadingTheory, setIsLoadingTheory] = useState(false)
   const [activeSection, setActiveSection] = useState<'melody' | 'chord' | 'activity'>('melody')
+  const [filteredPieces, setFilteredPieces] = useState<ClassicPiece[]>([])
+  const [isFilteringPieces, setIsFilteringPieces] = useState(true)
   
   // 퀴즈 관련 상태
   const [quizMode, setQuizMode] = useState<'none' | 'short-answer' | 'ox'>('none')
@@ -533,6 +535,52 @@ const ClassicMusicEducation = () => {
       setShowAnswer(false)
     }
   }, [selectedVideo])
+
+  // 추천곡 목록 필터링 (10만뷰 이상만 표시)
+  useEffect(() => {
+    const filterPiecesByViews = async () => {
+      setIsFilteringPieces(true)
+      const MIN_VIEWS = 100000 // 10만뷰
+      const filtered: ClassicPiece[] = []
+
+      // 각 추천곡의 YouTube 영상 뷰 수 확인
+      for (const piece of CLASSIC_PIECES) {
+        try {
+          const response = await youtubeApi.getVideoInfo(piece.youtubeId)
+          if (response.success && response.data) {
+            const videoInfo = response.data.video as any
+            const viewCount = videoInfo?.view_count || 0
+            
+            // 10만뷰 이상인 영상만 포함
+            if (viewCount >= MIN_VIEWS) {
+              filtered.push(piece)
+            } else {
+              console.log(`[필터링] ${piece.title} (${piece.composer}): ${viewCount.toLocaleString()}뷰 - 제외됨`)
+            }
+          } else {
+            // API 호출 실패 시 기본적으로 포함 (에러 방지)
+            filtered.push(piece)
+          }
+        } catch (error) {
+          console.error(`영상 정보 가져오기 실패 (${piece.title}):`, error)
+          // 에러 발생 시 기본적으로 포함
+          filtered.push(piece)
+        }
+      }
+
+      setFilteredPieces(filtered)
+      setIsFilteringPieces(false)
+    }
+
+    // 추천곡 모드일 때만 필터링 실행
+    if (searchMode === 'classic') {
+      filterPiecesByViews()
+    } else {
+      // 직접 곡 찾기 모드일 때는 필터링 불필요
+      setFilteredPieces([])
+      setIsFilteringPieces(false)
+    }
+  }, [searchMode])
 
   // 문제가 바뀔 때 힌트/정답 표시 상태 초기화
   useEffect(() => {
@@ -1006,20 +1054,31 @@ JSON 형식으로만 응답해주세요.`
     setAiSuggestion('')
 
     try {
-      const response = await youtubeApi.search(searchQuery, 10)
+      // 10만뷰 이상 영상만 검색
+      const response = await youtubeApi.search(searchQuery, 10, 100000)
       console.log('YouTube 검색 응답:', response)
       
       if (response.success && response.data) {
         const data = response.data as any
-        const videos: YouTubeVideo[] = (data.videos || []).map((v: any) => ({
-          videoId: v.videoId || v.id || v.video_id,
-          title: v.title,
-          channel: v.channel || v.channelTitle || v.channel_title || '',
-          thumbnail: v.thumbnail,
-          url: `https://www.youtube.com/watch?v=${v.videoId || v.id || v.video_id}`,
-          description: v.description || '',
-          viewCount: v.viewCount || v.view_count
-        }))
+        const MIN_VIEWS = 100000 // 10만뷰
+        const videos: YouTubeVideo[] = (data.videos || [])
+          .map((v: any) => ({
+            videoId: v.videoId || v.id || v.video_id,
+            title: v.title,
+            channel: v.channel || v.channelTitle || v.channel_title || '',
+            thumbnail: v.thumbnail,
+            url: `https://www.youtube.com/watch?v=${v.videoId || v.id || v.video_id}`,
+            description: v.description || '',
+            viewCount: v.viewCount || v.view_count || 0
+          }))
+          .filter((v: YouTubeVideo) => {
+            // 10만뷰 이상인 영상만 포함
+            const viewCount = v.viewCount || 0
+            if (viewCount < MIN_VIEWS) {
+              console.log(`[필터링] ${v.title}: ${viewCount.toLocaleString()}뷰 - 제외됨`)
+            }
+            return viewCount >= MIN_VIEWS
+          })
         
         if (videos.length === 0) {
           // 검색 결과가 없을 때
@@ -1161,8 +1220,20 @@ JSON 형식으로만 응답해주세요.`
       </div>
 
       {searchMode === 'classic' && (
-        <div className="pieces-grid">
-          {CLASSIC_PIECES.map((piece) => (
+        <>
+          {isFilteringPieces ? (
+            <div className="loading-state" style={{ padding: '3rem', textAlign: 'center' }}>
+              <span className="spinner"></span>
+              <p>추천 곡을 확인하는 중... (10만뷰 이상 영상만 표시됩니다)</p>
+            </div>
+          ) : filteredPieces.length === 0 ? (
+            <div className="empty-state" style={{ padding: '3rem', textAlign: 'center' }}>
+              <p>10만뷰 이상인 추천 곡을 찾을 수 없습니다.</p>
+              <p className="hint">YouTube API 키가 설정되어 있는지 확인하세요.</p>
+            </div>
+          ) : (
+            <div className="pieces-grid">
+              {filteredPieces.map((piece) => (
             <div
               key={piece.id}
               className={`piece-card ${selectedPiece?.id === piece.id ? 'selected' : ''}`}
@@ -1183,7 +1254,9 @@ JSON 형식으로만 응답해주세요.`
               </div>
             </div>
           ))}
-        </div>
+            </div>
+          )}
+        </>
       )}
 
       {selectedPiece && (

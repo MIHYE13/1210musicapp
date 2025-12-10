@@ -506,3 +506,121 @@ Perplexity API를 설정하면 곡의 배경, 작곡가 정보,
             "key_length": len(self.api_key) if self.api_key else 0,
             "service": "Perplexity AI"
         }
+    
+    def validate_api_key(self) -> Dict[str, any]:
+        """
+        Validate Perplexity API key by making a test API call
+        
+        Returns:
+            Dictionary with validation results:
+            {
+                "valid": bool,
+                "message": str,
+                "error": str (optional)
+            }
+        """
+        if not self.api_key:
+            return {
+                "valid": False,
+                "message": "API 키가 설정되지 않았습니다.",
+                "error": "PERPLEXITY_API_KEY 환경 변수를 설정하세요."
+            }
+        
+        # API 키 형식 검증
+        if not self.api_key.startswith("pplx-"):
+            return {
+                "valid": False,
+                "message": "API 키 형식이 올바르지 않습니다.",
+                "error": f"Perplexity API 키는 'pplx-'로 시작해야 합니다. 현재 키: {self.api_key[:10]}..."
+            }
+        
+        # 실제 API 호출로 검증
+        try:
+            import requests
+            
+            headers = {
+                "Authorization": f"Bearer {self.api_key}",
+                "Content-Type": "application/json"
+            }
+            
+            # 간단한 테스트 요청
+            test_models = [
+                "llama-3.1-sonar-large-128k-online",
+                "llama-3.1-sonar-small-128k-online",
+                "sonar",
+            ]
+            
+            for model in test_models:
+                data = {
+                    "model": model,
+                    "messages": [
+                        {
+                            "role": "user",
+                            "content": "test"
+                        }
+                    ],
+                    "max_tokens": 10
+                }
+                
+                try:
+                    response = requests.post(
+                        self.base_url,
+                        headers=headers,
+                        json=data,
+                        timeout=10
+                    )
+                    
+                    if response.status_code == 200:
+                        return {
+                            "valid": True,
+                            "message": f"API 키가 유효합니다. (모델: {model})",
+                            "model": model
+                        }
+                    elif response.status_code == 401:
+                        return {
+                            "valid": False,
+                            "message": "API 키가 유효하지 않습니다.",
+                            "error": "401 Unauthorized - API 키를 확인하세요."
+                        }
+                    elif response.status_code == 400:
+                        # 모델 이름 오류일 수 있으므로 다음 모델 시도
+                        continue
+                    else:
+                        error_text = response.text
+                        try:
+                            error_json = response.json()
+                            error_msg = error_json.get('error', {}).get('message', error_text)
+                        except:
+                            error_msg = error_text
+                        
+                        # 400이 아닌 다른 오류는 키 문제일 수 있음
+                        if response.status_code != 400:
+                            return {
+                                "valid": False,
+                                "message": f"API 호출 실패 (HTTP {response.status_code})",
+                                "error": error_msg
+                            }
+                except requests.exceptions.Timeout:
+                    continue
+                except Exception as e:
+                    continue
+            
+            # 모든 모델 시도 실패
+            return {
+                "valid": False,
+                "message": "API 키 검증 실패",
+                "error": "사용 가능한 모델을 찾을 수 없습니다. API 키와 네트워크 연결을 확인하세요."
+            }
+            
+        except ImportError:
+            return {
+                "valid": False,
+                "message": "requests 라이브러리가 설치되지 않았습니다.",
+                "error": "pip install requests 명령으로 설치하세요."
+            }
+        except Exception as e:
+            return {
+                "valid": False,
+                "message": "API 키 검증 중 오류 발생",
+                "error": str(e)
+            }
