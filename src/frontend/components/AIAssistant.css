@@ -270,10 +270,17 @@ textarea.form-control {
   font-weight: 500;
 }
 
+.download-buttons-group {
+  display: flex;
+  gap: 1rem;
+  margin-top: 1.5rem;
+  flex-wrap: wrap;
+}
+
 .download-button {
-  margin-top: 1rem;
-  padding: 0.85rem 1.75rem;
-  background: var(--primary-gradient);
+  flex: 1;
+  min-width: 200px;
+  padding: 0.9rem 1.75rem;
   color: white;
   border: none;
   border-radius: var(--border-radius-md);
@@ -282,11 +289,28 @@ textarea.form-control {
   font-weight: 500;
   transition: all var(--transition-normal);
   box-shadow: var(--shadow-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
 }
 
-.download-button:hover {
+.docx-button {
+  background: linear-gradient(135deg, #2c5aa0 0%, #1e3a5f 100%);
+}
+
+.text-button {
+  background: var(--primary-gradient);
+}
+
+.download-button:hover:not(:disabled) {
   transform: translateY(-2px);
   box-shadow: var(--shadow-md);
+}
+
+.download-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 .response-box.loading {

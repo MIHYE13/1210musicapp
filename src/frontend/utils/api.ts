@@ -72,7 +72,11 @@ class ApiClient {
         const contentType = response.headers.get('content-type') || ''
         if (contentType.includes('application/json')) {
           // JSON 오류 응답인 경우
-          data = await response.json()
+          const errorData = await response.json()
+          return {
+            success: false,
+            error: errorData.detail || errorData.error || '파일 다운로드에 실패했습니다.'
+          }
         } else {
           // 실제 파일 데이터
           data = await response.blob()
@@ -223,6 +227,12 @@ export const aiApi = {
       method: 'POST',
       body: JSON.stringify({ songTitle, grade, duration }),
     }),
+  
+  exportLessonPlanDocx: (plan: string, songTitle: string, grade: string, duration: number) =>
+    apiClient.request('/ai/lesson-plan/export-docx', {
+      method: 'POST',
+      body: JSON.stringify({ plan, songTitle, grade, duration }),
+    }, true), // blob 응답 처리
 }
 
 export const perplexityApi = {

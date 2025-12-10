@@ -3,9 +3,9 @@ FastAPI REST API Server
 Provides REST endpoints for the React frontend
 """
 
-from fastapi import FastAPI, File, UploadFile, Form, HTTPException
+from fastapi import FastAPI, File, UploadFile, Form, HTTPException, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, FileResponse
+from fastapi.responses import JSONResponse, FileResponse, Response
 from typing import Optional
 import os
 import sys
@@ -1252,12 +1252,12 @@ async def generate_lesson_plan(request: dict):
 각 부분은 2-3문장으로 간단하게 작성해주세요."""
 
         response = client.chat.completions.create(
-            model="gpt-4",
+            model="gpt-4o-mini",
             messages=[
                 {"role": "system", "content": "당신은 경험 많은 초등학교 음악 교사입니다."},
                 {"role": "user", "content": prompt}
             ],
-            max_tokens=600,
+            max_tokens=800,
             temperature=0.7
         )
         
@@ -1265,13 +1265,136 @@ async def generate_lesson_plan(request: dict):
         
         return {
             "success": True,
-            "plan": lesson_plan
+            "plan": lesson_plan,
+            "songTitle": song_title,
+            "grade": grade,
+            "duration": duration
         }
     except Exception as e:
+        import traceback
+        print(f"[ERROR] 수업 계획 생성 오류: {str(e)}")
+        traceback.print_exc()
         return {
             "success": False,
             "error": f"수업 계획 생성 오류: {str(e)}"
         }
+
+@app.post("/api/ai/lesson-plan/export-docx")
+async def export_lesson_plan_docx(request: dict, background_tasks: BackgroundTasks):
+    """수업 계획을 DOCX 파일로 내보내기"""
+    lesson_plan = request.get("plan")
+    song_title = request.get("songTitle", "수업계획")
+    grade = request.get("grade", "3-4학년")
+    duration = request.get("duration", 40)
+    
+    if not lesson_plan:
+        raise HTTPException(status_code=400, detail="수업 계획 내용이 없습니다.")
+    
+    temp_path = None
+    try:
+        # python-docx 라이브러리 사용
+        try:
+            from docx import Document
+            from docx.shared import Pt, RGBColor, Inches
+            from docx.enum.text import WD_ALIGN_PARAGRAPH
+        except ImportError:
+            raise HTTPException(
+                status_code=503,
+                detail="python-docx가 설치되지 않았습니다. pip install python-docx를 실행해주세요."
+            )
+        
+        # 새 문서 생성
+        doc = Document()
+        
+        # 제목 스타일 설정
+        title = doc.add_heading(f'{song_title} 수업 계획안', 0)
+        title.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        
+        # 기본 정보
+        info_para = doc.add_paragraph()
+        info_para.add_run(f'대상: {grade}').bold = True
+        info_para.add_run(f'  |  수업 시간: {duration}분')
+        
+        doc.add_paragraph()  # 빈 줄
+        
+        # 수업 계획 내용 파싱 및 추가
+        lines = lesson_plan.split('\n')
+        
+        for line in lines:
+            line = line.strip()
+            if not line:
+                doc.add_paragraph()  # 빈 줄 추가
+                continue
+            
+            # 섹션 제목 감지 (예: "도입 (5분):", "전개 (25분):" 등)
+            if ':' in line and any(keyword in line for keyword in ['도입', '전개', '정리', '활동', '단계']):
+                # 섹션 제목
+                heading = doc.add_heading(line.split(':')[0].strip(), level=1)
+                heading.alignment = WD_ALIGN_PARAGRAPH.LEFT
+                
+                # 섹션 내용
+                content = ':'.join(line.split(':')[1:]).strip()
+                if content:
+                    para = doc.add_paragraph(content)
+                    para.paragraph_format.space_after = Pt(12)
+            elif line.startswith('-') or line.startswith('•') or line.startswith('*'):
+                # 리스트 항목
+                para = doc.add_paragraph(line[1:].strip(), style='List Bullet')
+                para.paragraph_format.left_indent = Inches(0.5)
+            elif any(keyword in line for keyword in ['1.', '2.', '3.', '4.', '5.']):
+                # 번호 목록
+                para = doc.add_paragraph(line, style='List Number')
+                para.paragraph_format.left_indent = Inches(0.5)
+            else:
+                # 일반 문단
+                para = doc.add_paragraph(line)
+                para.paragraph_format.space_after = Pt(6)
+        
+        # 문서를 임시 파일로 저장
+        with tempfile.NamedTemporaryFile(delete=False, suffix='.docx') as tmp_file:
+            doc.save(tmp_file.name)
+            temp_path = tmp_file.name
+        
+        # 파일명 생성 (특수문자 제거)
+        safe_filename = "".join(c for c in song_title if c.isalnum() or c in (' ', '-', '_')).strip()
+        filename = f"수업계획_{safe_filename}_{grade}.docx"
+        
+        # 백그라운드 작업으로 임시 파일 삭제 예약
+        def cleanup_temp_file():
+            if temp_path and os.path.exists(temp_path):
+                try:
+                    os.unlink(temp_path)
+                except Exception as e:
+                    print(f"[WARN] 임시 파일 삭제 실패 {temp_path}: {e}")
+        
+        background_tasks.add_task(cleanup_temp_file)
+        
+        # FileResponse로 파일 반환
+        return FileResponse(
+            path=temp_path,
+            media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            filename=filename,
+            headers={
+                "Content-Disposition": f'attachment; filename="{filename}"'
+            }
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        import traceback
+        print(f"[ERROR] DOCX 생성 오류: {str(e)}")
+        traceback.print_exc()
+        # 오류 발생 시 임시 파일 정리
+        if temp_path and os.path.exists(temp_path):
+            try:
+                os.unlink(temp_path)
+            except Exception:
+                pass
+        raise HTTPException(
+            status_code=500,
+            detail=f"DOCX 파일 생성 오류: {str(e)}"
+        )
 
 # ==================== Perplexity ====================
 
@@ -1381,20 +1504,34 @@ async def perplexity_search(request: dict):
 
 @app.post("/api/youtube/search")
 async def youtube_search(request: dict):
-    """YouTube 검색"""
+    """YouTube 검색 (10만 뷰 이상 신뢰성 있는 영상만 추천)"""
     query = request.get("query")
     max_results = request.get("maxResults", 5)
+    min_views = request.get("minViews", 100000)  # 기본값: 10만 뷰
     
     if not query:
         raise HTTPException(status_code=400, detail="검색어를 입력해주세요.")
     
+    if not HAS_YOUTUBE_HELPER or not youtube_helper:
+        raise HTTPException(status_code=503, detail="YouTube Helper 모듈을 사용할 수 없습니다.")
+    
     try:
-        videos = youtube_helper.search_education_videos(query, max_results)
+        videos = youtube_helper.search_education_videos(query, max_results, min_views=min_views)
+        
+        # 필터링된 결과가 요청한 개수보다 적을 경우 안내
+        if len(videos) < max_results:
+            print(f"[INFO] {query} 검색: {len(videos)}개의 영상이 {min_views:,}뷰 이상 조건을 만족합니다.")
+        
         return {
             "success": True,
-            "videos": videos
+            "videos": videos,
+            "filtered": len(videos),
+            "min_views": min_views
         }
     except Exception as e:
+        import traceback
+        print(f"[ERROR] YouTube 검색 오류: {str(e)}")
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"YouTube 검색 오류: {str(e)}")
 
 # ==================== Chord Analysis ====================

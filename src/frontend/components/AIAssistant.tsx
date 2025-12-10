@@ -103,6 +103,13 @@ const AIAssistant = () => {
     }
   }
 
+  const [lessonPlanData, setLessonPlanData] = useState<{
+    plan: string
+    songTitle: string
+    grade: string
+    duration: number
+  } | null>(null)
+
   const handleGenerateLessonPlan = async () => {
     if (!songTitle.trim()) {
       setError('곡 제목을 입력해주세요.')
@@ -112,6 +119,7 @@ const AIAssistant = () => {
     setIsLoading(true)
     setError(null)
     setLessonPlan('')
+    setLessonPlanData(null)
 
     try {
       const apiResponse = await aiApi.generateLessonPlan(songTitle, gradeLevel, lessonDuration)
@@ -120,9 +128,16 @@ const AIAssistant = () => {
         const data = apiResponse.data as any
         if (data.plan) {
           setLessonPlan(data.plan)
+          setLessonPlanData({
+            plan: data.plan,
+            songTitle: data.songTitle || songTitle,
+            grade: data.grade || gradeLevel,
+            duration: data.duration || lessonDuration
+          })
         } else if (data.error) {
           setError(data.error)
           setLessonPlan('')
+          setLessonPlanData(null)
         } else {
           setLessonPlan(JSON.stringify(data))
         }
@@ -130,9 +145,11 @@ const AIAssistant = () => {
         const errorMsg = apiResponse.error || 'API 호출에 실패했습니다.'
         setError(errorMsg)
         setLessonPlan('')
+        setLessonPlanData(null)
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : '알 수 없는 오류가 발생했습니다.')
+      setLessonPlanData(null)
     } finally {
       setIsLoading(false)
     }
@@ -148,6 +165,48 @@ const AIAssistant = () => {
     a.download = `lesson_plan_${songTitle || '수업계획'}.txt`
     a.click()
     URL.revokeObjectURL(url)
+  }
+
+  const handleDownloadLessonPlanDocx = async () => {
+    if (!lessonPlanData) return
+    
+    setIsLoading(true)
+    setError(null)
+    
+    try {
+      const apiResponse = await aiApi.exportLessonPlanDocx(
+        lessonPlanData.plan,
+        lessonPlanData.songTitle,
+        lessonPlanData.grade,
+        lessonPlanData.duration
+      )
+      
+      if (apiResponse.success && apiResponse.data) {
+        // Blob 응답 처리
+        if (apiResponse.data instanceof Blob) {
+          const blob = apiResponse.data
+          const url = URL.createObjectURL(blob)
+          const a = document.createElement('a')
+          a.href = url
+          
+          // 파일명 생성
+          const safeFilename = lessonPlanData.songTitle.replace(/[^a-zA-Z0-9가-힣\s-_]/g, '')
+          a.download = `수업계획_${safeFilename}_${lessonPlanData.grade}.docx`
+          document.body.appendChild(a)
+          a.click()
+          document.body.removeChild(a)
+          URL.revokeObjectURL(url)
+        } else {
+          setError('예상치 못한 응답 형식입니다.')
+        }
+      } else {
+        setError(apiResponse.error || 'DOCX 파일 다운로드에 실패했습니다.')
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'DOCX 파일 다운로드 중 오류가 발생했습니다.')
+    } finally {
+      setIsLoading(false)
+    }
   }
 
   const handleClearChat = async () => {
@@ -424,9 +483,30 @@ const AIAssistant = () => {
               <div className="response-box">
                 <h4>📋 생성된 수업 계획</h4>
                 <div className="response-content">{lessonPlan}</div>
-                <button className="download-button" onClick={handleDownloadLessonPlan}>
-                  💾 수업 계획 다운로드
-                </button>
+                <div className="download-buttons-group">
+                  <button 
+                    className="download-button docx-button" 
+                    onClick={handleDownloadLessonPlanDocx}
+                    disabled={isLoading || !lessonPlanData}
+                  >
+                    {isLoading ? (
+                      <>
+                        <span className="spinner"></span>
+                        생성 중...
+                      </>
+                    ) : (
+                      <>
+                        📄 DOCX 파일로 다운로드
+                      </>
+                    )}
+                  </button>
+                  <button 
+                    className="download-button text-button" 
+                    onClick={handleDownloadLessonPlan}
+                  >
+                    💾 텍스트 파일로 다운로드
+                  </button>
+                </div>
               </div>
             )}
           </div>

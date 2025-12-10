@@ -64,47 +64,120 @@ class YouTubeHelper:
         return None
     
     def search_education_videos(self, query: str, max_results: int = 5,
-                                language: str = "ko") -> List[Dict]:
+                                language: str = "ko", min_views: int = 100000) -> List[Dict]:
         """
-        Search for educational videos
+        Search for educational videos with minimum view count filter
         
         Args:
             query: Search query
             max_results: Maximum number of results (1-50)
             language: Language code (ko, en)
+            min_views: Minimum view count (default: 100,000)
             
         Returns:
-            List of video information dictionaries
+            List of video information dictionaries (filtered by view count)
         """
         if not self.api_key:
             return self._fallback_video_search(query)
         
         try:
-            # Add educational keywords to query
-            enhanced_query = f"{query} 초등 음악 교육"
+            # 악보와 음원이 포함된 영상을 우선 검색하도록 키워드 추가
+            # 여러 검색 쿼리를 시도하여 악보/음원이 잘 나오는 영상 찾기
+            search_queries = [
+                f"{query} 악보 음원 초등 음악",
+                f"{query} 악보 연주 초등",
+                f"{query} 악기 연주 악보",
+                f"{query} 초등 음악 교육"
+            ]
             
-            params = {
-                "part": "snippet",
-                "q": enhanced_query,
-                "type": "video",
-                "maxResults": max_results,
-                "relevanceLanguage": language,
-                "videoCategoryId": "27",  # Education category
-                "safeSearch": "strict",
+            # 더 많은 결과를 가져와서 필터링 (최대 50개)
+            search_max_results = min(max_results * 3, 50)  # 필터링을 위해 더 많이 가져옴
+            
+            all_video_ids = []
+            all_video_snippets = {}
+            
+            # 여러 쿼리로 검색하여 악보/음원 관련 영상 우선 수집
+            for enhanced_query in search_queries[:2]:  # 상위 2개 쿼리만 사용
+                # Step 1: Search for videos
+                search_params = {
+                    "part": "snippet",
+                    "q": enhanced_query,
+                    "type": "video",
+                    "maxResults": min(search_max_results // 2, 25),
+                    "relevanceLanguage": language,
+                    "videoCategoryId": "27",  # Education category
+                    "safeSearch": "strict",
+                    "order": "viewCount",  # 조회수 순으로 정렬
+                    "key": self.api_key
+                }
+                
+                search_response = requests.get(
+                    f"{self.base_url}/search",
+                    params=search_params,
+                    timeout=10
+                )
+                
+                if search_response.status_code == 200:
+                    search_data = search_response.json()
+                    for item in search_data.get('items', []):
+                        video_id = item['id']['videoId']
+                        if video_id not in all_video_ids:
+                            all_video_ids.append(video_id)
+                            all_video_snippets[video_id] = item['snippet']
+            
+            if not all_video_ids:
+                # 기본 검색으로 대체
+                enhanced_query = f"{query} 초등 음악 교육"
+                search_params = {
+                    "part": "snippet",
+                    "q": enhanced_query,
+                    "type": "video",
+                    "maxResults": search_max_results,
+                    "relevanceLanguage": language,
+                    "videoCategoryId": "27",
+                    "safeSearch": "strict",
+                    "order": "viewCount",
+                    "key": self.api_key
+                }
+                
+                search_response = requests.get(
+                    f"{self.base_url}/search",
+                    params=search_params,
+                    timeout=10
+                )
+                
+                if search_response.status_code != 200:
+                    if HAS_STREAMLIT and st:
+                        st.warning(f"YouTube API 오류: {search_response.status_code}")
+                    else:
+                        print(f"YouTube API 오류: {search_response.status_code}")
+                    return self._fallback_video_search(query)
+                
+                search_data = search_response.json()
+                all_video_ids = [item['id']['videoId'] for item in search_data.get('items', [])]
+                for item in search_data.get('items', []):
+                    all_video_snippets[item['id']['videoId']] = item['snippet']
+            
+            if not all_video_ids:
+                return []
+            
+            # Step 2: Get video statistics (view count)
+            videos_params = {
+                "part": "snippet,statistics",
+                "id": ",".join(all_video_ids),
                 "key": self.api_key
             }
             
-            response = requests.get(
-                f"{self.base_url}/search",
-                params=params,
+            videos_response = requests.get(
+                f"{self.base_url}/videos",
+                params=videos_params,
                 timeout=10
             )
             
-            if response.status_code == 200:
-                data = response.json()
+            if videos_response.status_code != 200:
+                # 통계 정보를 가져올 수 없으면 기본 정보만 반환
                 videos = []
-                
-                for item in data.get('items', []):
+                for item in search_data.get('items', [])[:max_results]:
                     video_info = {
                         "title": item['snippet']['title'],
                         "description": item['snippet']['description'][:200] + "...",
@@ -112,23 +185,87 @@ class YouTubeHelper:
                         "url": f"https://www.youtube.com/watch?v={item['id']['videoId']}",
                         "thumbnail": item['snippet']['thumbnails']['medium']['url'],
                         "channel": item['snippet']['channelTitle'],
-                        "published_at": item['snippet']['publishedAt'][:10]
+                        "published_at": item['snippet']['publishedAt'][:10],
+                        "view_count": 0  # 알 수 없음
                     }
                     videos.append(video_info)
-                
                 return videos
-            else:
-                if HAS_STREAMLIT and st:
-                    st.warning(f"YouTube API 오류: {response.status_code}")
-                else:
-                    print(f"YouTube API 오류: {response.status_code}")
-                return self._fallback_video_search(query)
+            
+            videos_data = videos_response.json()
+            
+            # Step 3: Filter by view count and score by content quality
+            videos = []
+            score_keywords = {
+                '악보': 3,
+                '음원': 2,
+                '연주': 2,
+                '악기': 1,
+                '멜로디': 1,
+                '반주': 1,
+                'MR': 1,
+                '악기 연주': 2,
+                '피아노': 1,
+                '리코더': 1
+            }
+            
+            for item in videos_data.get('items', []):
+                view_count = int(item.get('statistics', {}).get('viewCount', 0))
+                
+                # 10만 뷰 이상인 영상만 포함
+                if view_count >= min_views:
+                    title = item['snippet']['title']
+                    description = item['snippet']['description']
+                    combined_text = (title + " " + description).lower()
+                    
+                    # 악보/음원 관련 키워드 점수 계산
+                    content_score = 0
+                    has_score = False
+                    has_audio = False
+                    
+                    for keyword, score in score_keywords.items():
+                        if keyword.lower() in combined_text:
+                            content_score += score
+                            if keyword in ['악보', '악기 연주']:
+                                has_score = True
+                            if keyword in ['음원', '연주', '멜로디', '반주', 'MR']:
+                                has_audio = True
+                    
+                    video_info = {
+                        "title": title,
+                        "description": description[:200] + "...",
+                        "video_id": item['id'],
+                        "url": f"https://www.youtube.com/watch?v={item['id']}",
+                        "thumbnail": item['snippet']['thumbnails']['medium']['url'],
+                        "channel": item['snippet']['channelTitle'],
+                        "published_at": item['snippet']['publishedAt'][:10],
+                        "view_count": view_count,
+                        "content_score": content_score,
+                        "has_score": has_score,
+                        "has_audio": has_audio
+                    }
+                    videos.append(video_info)
+            
+            # 콘텐츠 점수와 조회수를 고려하여 정렬
+            # 악보/음원이 있는 영상을 우선순위로 정렬
+            videos.sort(key=lambda x: (
+                x.get('has_score', False) and x.get('has_audio', False),  # 둘 다 있으면 최우선
+                x.get('has_score', False) or x.get('has_audio', False),   # 하나라도 있으면 우선
+                x.get('content_score', 0),  # 콘텐츠 점수
+                x.get('view_count', 0)       # 조회수
+            ), reverse=True)
+            
+            # 요청한 개수만큼만 반환
+            videos = videos[:max_results]
+            
+            return videos
                 
         except Exception as e:
             if HAS_STREAMLIT and st:
                 st.warning(f"YouTube 검색 오류: {str(e)}")
             else:
                 print(f"YouTube 검색 오류: {str(e)}")
+            import traceback
+            traceback.print_exc()
             return self._fallback_video_search(query)
     
     def find_tutorial_videos(self, instrument: str, song_title: str = None) -> List[Dict]:
