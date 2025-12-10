@@ -26,6 +26,10 @@ export default defineConfig({
     outDir: 'dist',
     sourcemap: true,
   },
+  // 환경 변수 보안 설정
+  // VITE_ 접두사가 있는 환경 변수만 클라이언트 번들에 포함됩니다.
+  // API 키나 비밀 정보는 절대 VITE_ 접두사를 사용하지 마세요!
+  envPrefix: 'VITE_',
 })
 
 
