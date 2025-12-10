@@ -33,11 +33,24 @@ function App() {
     return validPages.includes(hash as Page) ? (hash as Page) : 'home'
   }
 
-  const [currentPage, setCurrentPage] = useState<Page>(getPageFromHash())
+  const [currentPage, setCurrentPage] = useState<Page>(() => {
+    const page = getPageFromHash()
+    // 초기 로드 시 hash가 없으면 'home'으로 설정
+    if (!window.location.hash) {
+      window.location.hash = 'home'
+    }
+    return page
+  })
 
   useEffect(() => {
     const handleHashChange = () => {
       setCurrentPage(getPageFromHash())
+    }
+
+    // 초기 로드 시 hash가 없으면 'home'으로 설정
+    if (!window.location.hash) {
+      window.location.hash = 'home'
+      setCurrentPage('home')
     }
 
     window.addEventListener('hashchange', handleHashChange)
@@ -53,7 +66,7 @@ function App() {
     switch (currentPage) {
       case 'home':
         return (
-          <div className="home-page">
+          <div className="home-page" style={{ minHeight: '60vh', display: 'flex', flexDirection: 'column' }}>
             <h1>초등 음악 도우미</h1>
             <p className="subtitle">
               오디오나 악보를 업로드하면 초등학생이 배우기 쉬운 형태로 변환해드립니다!
