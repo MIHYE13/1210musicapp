@@ -68,10 +68,26 @@ except Exception as e:
 
 # Optional imports with error handling
 try:
+    # Ensure src directory is in path before importing
+    src_dir = Path(__file__).parent
+    if str(src_dir) not in sys.path:
+        sys.path.insert(0, str(src_dir))
+    
     from audio_processor import AudioProcessor
     HAS_AUDIO_PROCESSOR = True
+    print("[OK] audio_processor 모듈 로드 성공")
 except ImportError as e:
+    import traceback
     print(f"[WARN] audio_processor를 불러올 수 없습니다: {e}")
+    print(f"[WARN] 상세 오류:")
+    traceback.print_exc()
+    HAS_AUDIO_PROCESSOR = False
+    AudioProcessor = None
+except Exception as e:
+    import traceback
+    print(f"[WARN] audio_processor 로드 중 예상치 못한 오류: {e}")
+    print(f"[WARN] 상세 오류:")
+    traceback.print_exc()
     HAS_AUDIO_PROCESSOR = False
     AudioProcessor = None
 

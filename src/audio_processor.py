@@ -10,10 +10,21 @@ except ImportError:
     HAS_STREAMLIT = False
     st = None
 
-import soundfile as sf
+try:
+    import soundfile as sf
+except ImportError:
+    sf = None
+    print("[WARN] soundfile이 설치되지 않았습니다. pip install soundfile를 실행해주세요.")
+
 import numpy as np
 from io import BytesIO
-from music21 import stream, note, tempo, meter, key
+
+try:
+    from music21 import stream, note, tempo, meter, key
+except ImportError:
+    print("[WARN] music21이 설치되지 않았습니다. pip install music21을 실행해주세요.")
+    stream = note = tempo = meter = key = None
+
 from typing import Optional
 import tempfile
 import os
