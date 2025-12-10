@@ -176,10 +176,26 @@ except ImportError as e:
     YouTubeHelper = None
 
 try:
+    # Ensure src directory is in path
+    src_dir = Path(__file__).parent
+    if str(src_dir) not in sys.path:
+        sys.path.insert(0, str(src_dir))
+    
     from chord_analyzer import ChordAnalyzer
     HAS_CHORD_ANALYZER = True
+    print("[OK] chord_analyzer 모듈 로드 성공")
 except ImportError as e:
+    import traceback
     print(f"[WARN] chord_analyzer를 불러올 수 없습니다: {e}")
+    print(f"[WARN] 상세 오류:")
+    traceback.print_exc()
+    HAS_CHORD_ANALYZER = False
+    ChordAnalyzer = None
+except Exception as e:
+    import traceback
+    print(f"[WARN] chord_analyzer 로드 중 예상치 못한 오류: {e}")
+    print(f"[WARN] 상세 오류:")
+    traceback.print_exc()
     HAS_CHORD_ANALYZER = False
     ChordAnalyzer = None
 
