@@ -482,6 +482,7 @@ const ClassicMusicEducation = () => {
   const [quizQuestions, setQuizQuestions] = useState<Array<{
     question: string
     answer: string
+    hint?: string
     type: 'short-answer' | 'ox'
     userAnswer?: string
     isCorrect?: boolean
@@ -491,6 +492,8 @@ const ClassicMusicEducation = () => {
   const [quizScore, setQuizScore] = useState<{ correct: number; total: number }>({ correct: 0, total: 0 })
   const [isLoadingQuiz, setIsLoadingQuiz] = useState(false)
   const [isQuizComplete, setIsQuizComplete] = useState(false)
+  const [showHint, setShowHint] = useState<boolean>(false)
+  const [showAnswer, setShowAnswer] = useState<boolean>(false)
   
   // 학생 직접 검색 기능
   const [searchMode, setSearchMode] = useState<'classic' | 'search'>('classic')
@@ -509,8 +512,16 @@ const ClassicMusicEducation = () => {
       setUserAnswer('')
       setQuizScore({ correct: 0, total: 0 })
       setIsQuizComplete(false)
+      setShowHint(false)
+      setShowAnswer(false)
     }
   }, [selectedPiece])
+
+  // 문제가 바뀔 때 힌트/정답 표시 상태 초기화
+  useEffect(() => {
+    setShowHint(false)
+    setShowAnswer(false)
+  }, [currentQuestionIndex])
 
   // 퀴즈 문제 생성
   const generateQuiz = async (type: 'short-answer' | 'ox') => {
@@ -532,6 +543,7 @@ const ClassicMusicEducation = () => {
 - 초등학생이 이해할 수 있는 쉬운 난이도
 - 곡의 특징, 작곡가, 음악 이론 등에 관한 문제
 - ${type === 'short-answer' ? '답은 한 단어 또는 짧은 문장으로' : 'O 또는 X로 답할 수 있는 문제'}
+- 각 문제마다 힌트를 제공해주세요 (정답을 직접 말하지 않고 도움이 되는 정보)
 
 응답 형식 (JSON):
 {
@@ -539,6 +551,7 @@ const ClassicMusicEducation = () => {
     {
       "question": "문제 내용",
       "answer": "${type === 'short-answer' ? '정답 (한 단어 또는 짧은 문장)' : 'O 또는 X'}",
+      "hint": "힌트 내용 (정답을 직접 말하지 않고 도움이 되는 정보)",
       "type": "${type}"
     }
   ]
@@ -558,7 +571,10 @@ JSON 형식으로만 응답해주세요.`
           const jsonMatch = responseText.match(/\{[\s\S]*\}/)
           if (jsonMatch) {
             const parsed = JSON.parse(jsonMatch[0])
-            questions = parsed.questions || []
+            questions = (parsed.questions || []).map((q: any) => ({
+              ...q,
+              hint: q.hint || generateDefaultHint(q.question, q.answer, selectedPiece)
+            }))
           } else {
             // JSON이 아닌 경우 기본 문제 생성
             questions = generateDefaultQuestions(type)
@@ -591,8 +607,25 @@ JSON 형식으로만 응답해주세요.`
     }
   }
 
+  // 기본 힌트 생성
+  const generateDefaultHint = (question: string, answer: string, piece: ClassicPiece): string => {
+    if (question.includes('작곡가')) {
+      return `이 작곡가는 ${piece.period} 시대의 유명한 작곡가입니다.`
+    } else if (question.includes('시대')) {
+      return `이 곡은 ${piece.period} 시대에 작곡되었습니다.`
+    } else if (question.includes('조성')) {
+      return `곡의 조성은 ${piece.keySignature}입니다.`
+    } else if (question.includes('박자')) {
+      return `곡의 박자는 ${piece.timeSignature}입니다.`
+    } else if (question.includes('난이도')) {
+      return `이 곡의 난이도는 ${piece.difficulty}입니다.`
+    } else {
+      return `곡의 정보를 다시 한번 확인해보세요.`
+    }
+  }
+
   // 기본 문제 생성 (AI 실패 시 사용)
-  const generateDefaultQuestions = (type: 'short-answer' | 'ox'): Array<{ question: string; answer: string; type: 'short-answer' | 'ox' }> => {
+  const generateDefaultQuestions = (type: 'short-answer' | 'ox'): Array<{ question: string; answer: string; hint?: string; type: 'short-answer' | 'ox' }> => {
     if (!selectedPiece) return []
 
     if (type === 'short-answer') {
@@ -600,26 +633,31 @@ JSON 형식으로만 응답해주세요.`
         {
           question: `${selectedPiece.composer}의 "${selectedPiece.title}"의 작곡가는 누구인가요?`,
           answer: selectedPiece.composer,
+          hint: `이 작곡가는 ${selectedPiece.period} 시대의 유명한 작곡가입니다.`,
           type: 'short-answer'
         },
         {
           question: `이 곡의 시대는 무엇인가요?`,
           answer: selectedPiece.period,
+          hint: `이 곡은 ${selectedPiece.period} 시대에 작곡되었습니다.`,
           type: 'short-answer'
         },
         {
           question: `이 곡의 조성은 무엇인가요?`,
           answer: selectedPiece.keySignature.replace('장조', '').replace('단조', ''),
+          hint: `곡의 조성은 ${selectedPiece.keySignature}입니다.`,
           type: 'short-answer'
         },
         {
           question: `이 곡의 박자는 무엇인가요?`,
           answer: selectedPiece.timeSignature,
+          hint: `곡의 박자는 ${selectedPiece.timeSignature}입니다.`,
           type: 'short-answer'
         },
         {
           question: `이 곡의 난이도는 무엇인가요?`,
           answer: selectedPiece.difficulty,
+          hint: `이 곡의 난이도는 ${selectedPiece.difficulty}입니다.`,
           type: 'short-answer'
         }
       ]
@@ -628,26 +666,31 @@ JSON 형식으로만 응답해주세요.`
         {
           question: `${selectedPiece.composer}는 고전주의 시대의 작곡가입니다.`,
           answer: selectedPiece.period === '고전주의' ? 'O' : 'X',
+          hint: `${selectedPiece.composer}는 ${selectedPiece.period} 시대의 작곡가입니다.`,
           type: 'ox'
         },
         {
           question: `이 곡의 조성은 ${selectedPiece.keySignature}입니다.`,
           answer: 'O',
+          hint: `곡의 조성 정보를 확인해보세요.`,
           type: 'ox'
         },
         {
           question: `이 곡은 ${selectedPiece.timeSignature}박자로 되어 있습니다.`,
           answer: 'O',
+          hint: `곡의 박자 정보를 확인해보세요.`,
           type: 'ox'
         },
         {
           question: `이 곡은 매우 어려운 곡입니다.`,
           answer: selectedPiece.difficulty === '고급' ? 'O' : 'X',
+          hint: `이 곡의 난이도는 ${selectedPiece.difficulty}입니다.`,
           type: 'ox'
         },
         {
           question: `${selectedPiece.composer}는 바로크 시대의 작곡가입니다.`,
           answer: selectedPiece.period === '바로크' ? 'O' : 'X',
+          hint: `${selectedPiece.composer}는 ${selectedPiece.period} 시대의 작곡가입니다.`,
           type: 'ox'
         }
       ]
@@ -707,6 +750,8 @@ JSON 형식으로만 응답해주세요.`
     setUserAnswer('')
     setQuizScore({ correct: 0, total: quizQuestions.length })
     setIsQuizComplete(false)
+    setShowHint(false)
+    setShowAnswer(false)
     // 사용자 답안 초기화
     const resetQuestions = quizQuestions.map(q => ({
       ...q,
@@ -1208,6 +1253,55 @@ JSON 형식으로만 응답해주세요.`
                         </div>
                         <div className="question-text">
                           {quizQuestions[currentQuestionIndex]?.question || '문제를 불러오는 중...'}
+                        </div>
+                        
+                        {/* 힌트 표시 */}
+                        {showHint && quizQuestions[currentQuestionIndex]?.hint && (
+                          <div className="quiz-hint-box">
+                            <div className="hint-icon">💡</div>
+                            <div className="hint-text">{quizQuestions[currentQuestionIndex].hint}</div>
+                          </div>
+                        )}
+                        
+                        {/* 정답 표시 */}
+                        {showAnswer && (
+                          <div className="quiz-answer-box">
+                            <div className="answer-icon">✓</div>
+                            <div className="answer-text">
+                              <span className="answer-label-text">정답: </span>
+                              <span className="answer-value">{quizQuestions[currentQuestionIndex]?.answer}</span>
+                            </div>
+                          </div>
+                        )}
+                        
+                        {/* 힌트/정답 버튼 */}
+                        <div className="quiz-help-buttons">
+                          {quizQuestions[currentQuestionIndex]?.hint && (
+                            <button
+                              className="hint-button"
+                              onClick={() => setShowHint(!showHint)}
+                            >
+                              {showHint ? '💡 힌트 숨기기' : '💡 힌트 보기'}
+                            </button>
+                          )}
+                          <button
+                            className="answer-button"
+                            onClick={() => {
+                              const newShowAnswer = !showAnswer
+                              setShowAnswer(newShowAnswer)
+                              // 정답 확인 시 자동으로 답안 입력란에 정답 채우기
+                              if (newShowAnswer && quizQuestions[currentQuestionIndex]) {
+                                const currentAnswer = quizQuestions[currentQuestionIndex].answer
+                                if (quizMode === 'ox') {
+                                  setUserAnswer(currentAnswer.toUpperCase())
+                                } else {
+                                  setUserAnswer(currentAnswer)
+                                }
+                              }
+                            }}
+                          >
+                            {showAnswer ? '✓ 정답 숨기기' : '✓ 정답 확인'}
+                          </button>
                         </div>
                         
                         {quizMode === 'ox' ? (
