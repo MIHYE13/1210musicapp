@@ -472,8 +472,9 @@ const ClassicMusicEducation = () => {
   const [selectedPiece, setSelectedPiece] = useState<ClassicPiece | null>(null)
   const [isAnalyzing, setIsAnalyzing] = useState(false)
   const [analysisResult, setAnalysisResult] = useState<any>(null)
-  const [musicTheory, setMusicTheory] = useState<string>('')
-  const [isLoadingTheory, setIsLoadingTheory] = useState(false)
+  // 음악 이론 관련 상태 (현재 사용하지 않지만 향후 확장 가능)
+  // const [musicTheory, setMusicTheory] = useState<string>('')
+  // const [isLoadingTheory, setIsLoadingTheory] = useState(false)
   const [activeSection, setActiveSection] = useState<'melody' | 'chord' | 'activity'>('melody')
   
   // 퀴즈 관련 상태
@@ -501,7 +502,6 @@ const ClassicMusicEducation = () => {
 
   useEffect(() => {
     if (selectedPiece) {
-      loadMusicTheory()
       // 퀴즈 초기화
       setQuizMode('none')
       setQuizQuestions([])
@@ -511,33 +511,6 @@ const ClassicMusicEducation = () => {
       setIsQuizComplete(false)
     }
   }, [selectedPiece])
-
-  const loadMusicTheory = async () => {
-    if (!selectedPiece) return
-
-    setIsLoadingTheory(true)
-    try {
-      const prompt = `${selectedPiece.composer}의 "${selectedPiece.title}"에 대해 초등학생이 이해하기 쉽게 설명해주세요. 
-다음 내용을 포함해주세요:
-1. 작곡가와 곡의 배경
-2. 사용된 음악 이론 (조성, 박자, 형식 등)
-3. 곡의 특징과 감상 포인트
-4. 초등학생이 따라할 수 있는 활동 제안
-
-간단하고 재미있게 설명해주세요.`
-
-      const response = await aiApi.chat(prompt)
-      if (response.success && response.data) {
-        const data = response.data as any
-        setMusicTheory(data.response || '음악 이론 정보를 불러오는 중...')
-      }
-    } catch (error) {
-      console.error('음악 이론 로드 실패:', error)
-      setMusicTheory('음악 이론 정보를 불러올 수 없습니다.')
-    } finally {
-      setIsLoadingTheory(false)
-    }
-  }
 
   // 퀴즈 문제 생성
   const generateQuiz = async (type: 'short-answer' | 'ox') => {
@@ -683,14 +656,19 @@ JSON 형식으로만 응답해주세요.`
 
   // 답안 제출
   const handleSubmitAnswer = () => {
-    if (!userAnswer.trim() || currentQuestionIndex >= quizQuestions.length) return
+    if (!userAnswer.trim() || 
+        currentQuestionIndex >= quizQuestions.length || 
+        quizQuestions.length === 0 ||
+        quizMode === 'none') return
 
     const currentQuestion = quizQuestions[currentQuestionIndex]
+    if (!currentQuestion) return
+
     let isCorrect = false
 
     if (quizMode === 'ox') {
       isCorrect = userAnswer.trim().toUpperCase() === currentQuestion.answer.toUpperCase()
-    } else {
+    } else if (quizMode === 'short-answer') {
       // 단답형: 대소문자 무시하고 비교
       const normalizedUserAnswer = userAnswer.trim().toLowerCase()
       const normalizedCorrectAnswer = currentQuestion.answer.toLowerCase()
@@ -724,6 +702,7 @@ JSON 형식으로만 응답해주세요.`
 
   // 퀴즈 다시 시작
   const handleRestartQuiz = () => {
+    if (quizQuestions.length === 0) return
     setCurrentQuestionIndex(0)
     setUserAnswer('')
     setQuizScore({ correct: 0, total: quizQuestions.length })
@@ -951,28 +930,29 @@ JSON 형식으로만 응답해주세요.`
 
       {searchMode === 'classic' && (
         <div className="pieces-grid">
-        {CLASSIC_PIECES.map((piece) => (
-          <div
-            key={piece.id}
-            className={`piece-card ${selectedPiece?.id === piece.id ? 'selected' : ''}`}
-            onClick={() => handleSelectPiece(piece)}
-          >
-            <div className="piece-header">
-              <h3>{piece.title}</h3>
-              <span className="composer">{piece.composer}</span>
+          {CLASSIC_PIECES.map((piece) => (
+            <div
+              key={piece.id}
+              className={`piece-card ${selectedPiece?.id === piece.id ? 'selected' : ''}`}
+              onClick={() => handleSelectPiece(piece)}
+            >
+              <div className="piece-header">
+                <h3>{piece.title}</h3>
+                <span className="composer">{piece.composer}</span>
+              </div>
+              <div className="piece-meta">
+                <span className="period">{piece.period}</span>
+                <span className={`difficulty ${piece.difficulty}`}>{piece.difficulty}</span>
+              </div>
+              <p className="piece-description">{piece.description}</p>
+              <div className="piece-info">
+                <span>조성: {piece.keySignature}</span>
+                <span>박자: {piece.timeSignature}</span>
+              </div>
             </div>
-            <div className="piece-meta">
-              <span className="period">{piece.period}</span>
-              <span className={`difficulty ${piece.difficulty}`}>{piece.difficulty}</span>
-            </div>
-            <p className="piece-description">{piece.description}</p>
-            <div className="piece-info">
-              <span>조성: {piece.keySignature}</span>
-              <span>박자: {piece.timeSignature}</span>
-            </div>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
 
       {selectedPiece && (
         <div className="piece-detail-section">
@@ -1108,16 +1088,25 @@ JSON 형식으로만 응답해주세요.`
                 <div className="activity-section">
                   <h4>🎯 음악 퀴즈</h4>
                   
-                  {quizMode === 'none' ? (
+                  {!selectedPiece ? (
                     <div className="quiz-mode-selection">
                       <p className="quiz-intro">
-                        {selectedPiece?.composer}의 "{selectedPiece?.title}"에 대한 퀴즈를 풀어보세요!
+                        먼저 위에서 곡을 선택해주세요!
+                      </p>
+                      <p className="quiz-hint">
+                        곡을 선택하면 해당 곡에 대한 퀴즈를 풀 수 있습니다.
+                      </p>
+                    </div>
+                  ) : quizMode === 'none' ? (
+                    <div className="quiz-mode-selection">
+                      <p className="quiz-intro">
+                        {selectedPiece.composer}의 "{selectedPiece.title}"에 대한 퀴즈를 풀어보세요!
                       </p>
                       <div className="quiz-mode-buttons">
                         <button
                           className="quiz-mode-button"
                           onClick={() => generateQuiz('short-answer')}
-                          disabled={isLoadingQuiz}
+                          disabled={isLoadingQuiz || !selectedPiece}
                         >
                           📝 단답형 퀴즈
                           <span className="quiz-mode-desc">5문제</span>
@@ -1125,7 +1114,7 @@ JSON 형식으로만 응답해주세요.`
                         <button
                           className="quiz-mode-button"
                           onClick={() => generateQuiz('ox')}
-                          disabled={isLoadingQuiz}
+                          disabled={isLoadingQuiz || !selectedPiece}
                         >
                           ✅ OX형 퀴즈
                           <span className="quiz-mode-desc">5문제</span>
@@ -1202,11 +1191,11 @@ JSON 형식으로만 응답해주세요.`
                         <div className="progress-bar">
                           <div 
                             className="progress-fill" 
-                            style={{ width: `${((currentQuestionIndex + 1) / quizQuestions.length) * 100}%` }}
+                            style={{ width: `${Math.min(((currentQuestionIndex + 1) / quizQuestions.length) * 100, 100)}%` }}
                           />
                         </div>
                         <span className="progress-text">
-                          {currentQuestionIndex + 1} / {quizQuestions.length}
+                          {Math.min(currentQuestionIndex + 1, quizQuestions.length)} / {quizQuestions.length}
                         </span>
                       </div>
                       
@@ -1215,10 +1204,10 @@ JSON 형식으로만 응답해주세요.`
                           <span className="question-type-badge">
                             {quizMode === 'ox' ? 'OX형' : '단답형'}
                           </span>
-                          <span className="question-number-large">Q{currentQuestionIndex + 1}</span>
+                          <span className="question-number-large">Q{Math.min(currentQuestionIndex + 1, quizQuestions.length)}</span>
                         </div>
                         <div className="question-text">
-                          {quizQuestions[currentQuestionIndex].question}
+                          {quizQuestions[currentQuestionIndex]?.question || '문제를 불러오는 중...'}
                         </div>
                         
                         {quizMode === 'ox' ? (
@@ -1263,7 +1252,7 @@ JSON 형식으로만 응답해주세요.`
                       </div>
                       
                       <div className="quiz-score-mini">
-                        현재 점수: {quizScore.correct} / {currentQuestionIndex} {currentQuestionIndex > 0 ? `(${Math.round((quizScore.correct / currentQuestionIndex) * 100)}%)` : ''}
+                        현재 점수: {quizScore.correct} / {currentQuestionIndex} {currentQuestionIndex > 0 && quizScore.correct > 0 ? `(${Math.round((quizScore.correct / currentQuestionIndex) * 100)}%)` : ''}
                       </div>
                     </div>
                   ) : (

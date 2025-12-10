@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { HiPlay, HiExternalLink, HiMusicNote } from 'react-icons/hi'
+import { HiExternalLink, HiMusicNote } from 'react-icons/hi'
 import './PerplexityYouTube.css'
 import { perplexityApi, youtubeApi, chordApi } from '../utils/api'
 
@@ -29,7 +29,7 @@ const PerplexityYouTube = () => {
   const [videoSearchType, setVideoSearchType] = useState('일반 검색')
   const [maxResults, setMaxResults] = useState(5)
   const [youtubeVideos, setYoutubeVideos] = useState<YouTubeVideo[]>([])
-  const [selectedVideo, setSelectedVideo] = useState<string | null>(null)
+  // const [selectedVideo, setSelectedVideo] = useState<string | null>(null) // 사용하지 않음
   
   // 오디오 분석 관련
   const [analyzingVideoId, setAnalyzingVideoId] = useState<string | null>(null)
@@ -154,9 +154,9 @@ const PerplexityYouTube = () => {
     }
   }
 
-  const handleVideoClick = (videoId: string) => {
-    setSelectedVideo(selectedVideo === videoId ? null : videoId)
-  }
+  // const handleVideoClick = (videoId: string) => {
+  //   setSelectedVideo(selectedVideo === videoId ? null : videoId)
+  // } // 사용하지 않음
 
   const handleAnalyzeAudio = async (video: YouTubeVideo) => {
     if (!video.url) {

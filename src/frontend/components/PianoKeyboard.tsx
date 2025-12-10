@@ -44,9 +44,9 @@ const PianoKeyboard = ({
   }
 
   const WHITE_KEYS = ['C', 'D', 'E', 'F', 'G', 'A', 'B']
-  const BLACK_KEY_POSITIONS: Record<string, number> = {
-    'C': 0.6, 'D': 0.4, 'F': 0.6, 'G': 0.4, 'A': 0.4
-  }
+  // const BLACK_KEY_POSITIONS: Record<string, number> = {
+  //   'C': 0.6, 'D': 0.4, 'F': 0.6, 'G': 0.4, 'A': 0.4
+  // } // 사용하지 않음
 
   const playNote = (note: string) => {
     if (!interactive || !audioContextRef.current) return
@@ -110,7 +110,7 @@ const PianoKeyboard = ({
   const blackKeys: JSX.Element[] = []
 
   octaves.forEach(octave => {
-    WHITE_KEYS.forEach((noteName, index) => {
+    WHITE_KEYS.forEach((noteName) => {
       const noteFull = `${noteName}${octave}`
       const isHighlighted = isNoteHighlighted(noteName, octave)
       const isPressed = isNotePressed(noteName, octave)

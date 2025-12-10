@@ -38,6 +38,7 @@ const ApiKeyStatus = () => {
     } catch (error) {
       // 네트워크 오류 처리
       if (error instanceof TypeError && error.message.includes('fetch')) {
+        const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8501/api'
         setApiStatuses([
           { 
             name: 'API 서버', 
@@ -45,6 +46,7 @@ const ApiKeyStatus = () => {
             message: `서버에 연결할 수 없습니다. (${apiBaseUrl})` 
           },
         ])
+        return
       } else {
         // 백엔드가 없을 경우 로컬에서 확인
         checkLocalApiKeys()

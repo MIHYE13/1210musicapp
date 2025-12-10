@@ -32,7 +32,7 @@ const RhythmComposer = () => {
   const [inputMode, setInputMode] = useState<'piano' | 'notes'>('piano') // 입력 모드
   const [selectedOctave, setSelectedOctave] = useState<number>(4) // 선택된 옥타브
   const audioContextRef = useRef<AudioContext | null>(null)
-  const playbackTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const playbackTimeoutRef = useRef<number | null>(null)
   const shouldStopRef = useRef<boolean>(false)
 
   // 계이름 매핑 (도레미파솔라시)

@@ -4,7 +4,7 @@ import PianoKeyboard from './PianoKeyboard'
 
 // 음표 이름 매핑
 const NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
-const NOTE_NAMES_FLAT = ['C', 'Db', 'D', 'Eb', 'E', 'F', 'Gb', 'G', 'Ab', 'A', 'Bb', 'B']
+// const NOTE_NAMES_FLAT = ['C', 'Db', 'D', 'Eb', 'E', 'F', 'Gb', 'G', 'Ab', 'A', 'Bb', 'B'] // 사용하지 않음
 
 // 화음 타입 및 표시 이름 (초등학생 수준: 장3화음, 단3화음만)
 const CHORD_OPTIONS: ChordOption[] = [
@@ -12,20 +12,20 @@ const CHORD_OPTIONS: ChordOption[] = [
   { type: 'minor', name: 'minor', intervals: [0, 3, 7], displayName: '단3화음 (Minor)' },
 ]
 
-// 화음 타입 (호환성 유지)
-const CHORD_TYPES: Record<string, number[]> = {
-  'major': [0, 4, 7],
-  'minor': [0, 3, 7],
-  'diminished': [0, 3, 6],
-  'augmented': [0, 4, 8],
-  'sus2': [0, 2, 7],
-  'sus4': [0, 5, 7],
-  '7': [0, 4, 7, 10],
-  'maj7': [0, 4, 7, 11],
-  'm7': [0, 3, 7, 10],
-  'dim7': [0, 3, 6, 9],
-  'aug7': [0, 4, 8, 10],
-}
+// 화음 타입 (호환성 유지 - 현재 사용하지 않음)
+// const CHORD_TYPES: Record<string, number[]> = {
+//   'major': [0, 4, 7],
+//   'minor': [0, 3, 7],
+//   'diminished': [0, 3, 6],
+//   'augmented': [0, 4, 8],
+//   'sus2': [0, 2, 7],
+//   'sus4': [0, 5, 7],
+//   '7': [0, 4, 7, 10],
+//   'maj7': [0, 4, 7, 11],
+//   'm7': [0, 3, 7, 10],
+//   'dim7': [0, 3, 6, 9],
+//   'aug7': [0, 4, 8, 10],
+// }
 
 interface ChordOption {
   type: string
@@ -85,7 +85,7 @@ const ChordAnalysis = () => {
 
   // 건반 클릭 핸들러 - 루트 음 선택
   const handleKeyClick = (note: string) => {
-    const root = extractRootNote(note)
+    // const root = extractRootNote(note) // 사용하지 않음
     const noteOctave = parseInt(note.match(/\d/)?.[0] || '4')
     
     setRootNote(note)
