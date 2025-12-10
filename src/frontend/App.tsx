@@ -6,7 +6,7 @@ import {
   HiPuzzle,
   HiAcademicCap
 } from 'react-icons/hi'
-import { HiMusicNote } from 'react-icons/hi2'
+import { FaMusic } from 'react-icons/fa'
 import './App.css'
 import Header from './components/Header'
 import Navigation from './components/Navigation'
@@ -92,7 +92,7 @@ function App() {
               </div>
               <div className="feature-card" onClick={() => handlePageChange('score-processing')}>
                 <div className="icon-wrapper">
-                  <HiMusicNote />
+                  <FaMusic />
                 </div>
                 <h3>악보 처리</h3>
                 <p>계이름 추가, 다장조 변환, 반주 생성</p>
