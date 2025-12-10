@@ -1,4 +1,12 @@
 import { useState, useEffect } from 'react'
+import { 
+  HiMicrophone, 
+  HiMusicalNote, 
+  HiSparkles,
+  HiSearch,
+  HiPuzzle,
+  HiAcademicCap
+} from 'react-icons/hi'
 import './App.css'
 import Header from './components/Header'
 import Navigation from './components/Navigation'
@@ -46,41 +54,62 @@ function App() {
       case 'home':
         return (
           <div className="home-page">
-            <h1>🎵 초등 음악 도우미</h1>
+            <h1>초등 음악 도우미</h1>
             <p className="subtitle">
               오디오나 악보를 업로드하면 초등학생이 배우기 쉬운 형태로 변환해드립니다!
             </p>
             <p className="features">
-              <strong>계이름 기재 · 다장조 변환 · 반주 추가 · 자동 재생</strong>
+              <strong>계이름 기재</strong> · <strong>다장조 변환</strong> · <strong>반주 추가</strong> · <strong>자동 재생</strong>
             </p>
             
             <div className="info-box">
-              <p>👨‍🏫 <strong>교사이신가요?</strong> 위 메뉴에서 '교사 대시보드'를 선택하여 학급과 학생을 관리하세요!</p>
+              <p>
+                <HiAcademicCap style={{ display: 'inline', marginRight: '0.5rem', fontSize: '1.2rem' }} />
+                <strong>교사이신가요?</strong> 위 메뉴에서 '교사 대시보드'를 선택하여 학급과 학생을 관리하세요!
+              </p>
             </div>
 
             <div className="feature-grid">
               <div className="feature-card" onClick={() => handlePageChange('audio-to-score')}>
-                <h3>🎤 오디오 → 악보</h3>
+                <div className="icon-wrapper">
+                  <HiMicrophone />
+                </div>
+                <h3>오디오 → 악보</h3>
                 <p>MP3, WAV 파일을 업로드하여 악보로 변환</p>
               </div>
               <div className="feature-card" onClick={() => handlePageChange('score-processing')}>
-                <h3>🎼 악보 처리</h3>
+                <div className="icon-wrapper">
+                  <HiMusicalNote />
+                </div>
+                <h3>악보 처리</h3>
                 <p>계이름 추가, 다장조 변환, 반주 생성</p>
               </div>
               <div className="feature-card" onClick={() => handlePageChange('ai-assistant')}>
-                <h3>🤖 AI 도우미</h3>
+                <div className="icon-wrapper">
+                  <HiSparkles />
+                </div>
+                <h3>AI 도우미</h3>
                 <p>음악 이론 질문, 수업 계획 생성</p>
               </div>
               <div className="feature-card" onClick={() => handlePageChange('perplexity-youtube')}>
-                <h3>🔍 정보 & 영상</h3>
+                <div className="icon-wrapper">
+                  <HiSearch />
+                </div>
+                <h3>정보 & 영상</h3>
                 <p>최신 정보 조사, 교육 영상 검색</p>
               </div>
               <div className="feature-card" onClick={() => handlePageChange('chord-analysis')}>
-                <h3>🎹 화음 분석</h3>
+                <div className="icon-wrapper">
+                  <HiPuzzle />
+                </div>
+                <h3>화음 분석</h3>
                 <p>화음 자동 분석, 피아노 건반 표시</p>
               </div>
               <div className="feature-card" onClick={() => handlePageChange('teacher-dashboard')}>
-                <h3>👨‍🏫 교사 대시보드</h3>
+                <div className="icon-wrapper">
+                  <HiAcademicCap />
+                </div>
+                <h3>교사 대시보드</h3>
                 <p>학급 관리, 학생 관리, 수업 기록</p>
               </div>
             </div>

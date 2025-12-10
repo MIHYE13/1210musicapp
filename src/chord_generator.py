@@ -10,7 +10,23 @@ except ImportError:
     HAS_STREAMLIT = False
     st = None
 
-from music21 import stream, note, chord, key, pitch
+# Import music21 with error handling
+try:
+    from music21 import stream, note, chord, key, pitch
+    HAS_MUSIC21 = True
+except ImportError as e:
+    HAS_MUSIC21 = False
+    if HAS_STREAMLIT and st:
+        st.error(f"music21이 설치되지 않았습니다: {e}. pip install music21을 실행해주세요.")
+    else:
+        print(f"[ERROR] music21이 설치되지 않았습니다: {e}. pip install music21을 실행해주세요.")
+    # Create dummy classes to prevent import errors
+    stream = None
+    note = None
+    chord = None
+    key = None
+    pitch = None
+
 from typing import List, Optional
 
 class ChordGenerator:

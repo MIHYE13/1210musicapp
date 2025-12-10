@@ -3,7 +3,16 @@ Chord Analyzer and Piano Keyboard Visualizer
 Analyzes chords from MIDI and displays them on piano keyboard
 """
 
-from music21 import *
+# Import music21 with error handling
+try:
+    from music21 import *
+    HAS_MUSIC21 = True
+except ImportError as e:
+    HAS_MUSIC21 = False
+    print(f"[ERROR] music21이 설치되지 않았습니다: {e}. pip install music21을 실행해주세요.")
+    # Create dummy classes to prevent import errors
+    pass
+
 try:
     import streamlit as st
     HAS_STREAMLIT = True
