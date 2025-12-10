@@ -3,7 +3,7 @@ FastAPI REST API Server
 Provides REST endpoints for the React frontend
 """
 
-from fastapi import FastAPI, File, UploadFile, Form, HTTPException, BackgroundTasks
+from fastapi import FastAPI, File, UploadFile, Form, HTTPException, BackgroundTasks, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, FileResponse, Response
 from typing import Optional
@@ -1775,11 +1775,15 @@ async def perplexity_search(request: dict):
 # ==================== YouTube ====================
 
 @app.post("/api/youtube/search")
-async def youtube_search(request: dict):
+async def youtube_search(request: Request):
     """YouTube 검색 (10만 뷰 이상 신뢰성 있는 영상만 추천)"""
-    query = request.get("query")
-    max_results = request.get("maxResults", 5)
-    min_views = request.get("minViews", 100000)  # 기본값: 10만 뷰
+    try:
+        body = await request.json()
+        query = body.get("query")
+        max_results = body.get("maxResults", 5)
+        min_views = body.get("minViews", 100000)  # 기본값: 10만 뷰
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"요청 데이터 파싱 오류: {str(e)}")
     
     if not query:
         raise HTTPException(status_code=400, detail="검색어를 입력해주세요.")

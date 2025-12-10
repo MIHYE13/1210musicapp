@@ -502,6 +502,9 @@ const ClassicMusicEducation = () => {
   const [searchResults, setSearchResults] = useState<YouTubeVideo[]>([])
   const [selectedVideo, setSelectedVideo] = useState<YouTubeVideo | null>(null)
   const [customYoutubeId, setCustomYoutubeId] = useState<string>('')
+  const [noResultsMessage, setNoResultsMessage] = useState<string>('')
+  const [aiSuggestion, setAiSuggestion] = useState<string>('')
+  const [isLoadingSuggestion, setIsLoadingSuggestion] = useState(false)
 
   useEffect(() => {
     if (selectedPiece) {
@@ -517,6 +520,20 @@ const ClassicMusicEducation = () => {
     }
   }, [selectedPiece])
 
+  useEffect(() => {
+    if (selectedVideo) {
+      // 퀴즈 초기화
+      setQuizMode('none')
+      setQuizQuestions([])
+      setCurrentQuestionIndex(0)
+      setUserAnswer('')
+      setQuizScore({ correct: 0, total: 0 })
+      setIsQuizComplete(false)
+      setShowHint(false)
+      setShowAnswer(false)
+    }
+  }, [selectedVideo])
+
   // 문제가 바뀔 때 힌트/정답 표시 상태 초기화
   useEffect(() => {
     setShowHint(false)
@@ -525,7 +542,7 @@ const ClassicMusicEducation = () => {
 
   // 퀴즈 문제 생성
   const generateQuiz = async (type: 'short-answer' | 'ox') => {
-    if (!selectedPiece) return
+    if (!selectedPiece && !selectedVideo) return
 
     setIsLoadingQuiz(true)
     setQuizMode(type)
@@ -536,7 +553,13 @@ const ClassicMusicEducation = () => {
     setIsQuizComplete(false)
 
     try {
-      const prompt = `${selectedPiece.composer}의 "${selectedPiece.title}"에 대해 초등학생 수준의 음악 퀴즈 문제를 만들어주세요.
+      let prompt = ''
+      let pieceInfo: ClassicPiece | null = null
+      
+      if (selectedPiece) {
+        // 추천 곡 감상 모드
+        pieceInfo = selectedPiece
+        prompt = `${selectedPiece.composer}의 "${selectedPiece.title}"에 대해 초등학생 수준의 음악 퀴즈 문제를 만들어주세요.
 
 요구사항:
 - ${type === 'short-answer' ? '단답형 문제 5개' : 'OX형 문제 5개'}
@@ -558,6 +581,36 @@ const ClassicMusicEducation = () => {
 }
 
 JSON 형식으로만 응답해주세요.`
+      } else if (selectedVideo) {
+        // 직접 곡 찾기 모드
+        prompt = `다음 YouTube 영상에 대한 초등학생 수준의 음악 퀴즈 문제를 만들어주세요.
+
+영상 정보:
+- 제목: "${selectedVideo.title}"
+- 채널: "${selectedVideo.channel}"
+${selectedVideo.description ? `- 설명: "${selectedVideo.description.substring(0, 200)}"` : ''}
+
+요구사항:
+- ${type === 'short-answer' ? '단답형 문제 5개' : 'OX형 문제 5개'}
+- 초등학생이 이해할 수 있는 쉬운 난이도
+- 영상의 내용, 음악 특징, 악기, 리듬 등에 관한 문제
+- ${type === 'short-answer' ? '답은 한 단어 또는 짧은 문장으로' : 'O 또는 X로 답할 수 있는 문제'}
+- 각 문제마다 힌트를 제공해주세요 (정답을 직접 말하지 않고 도움이 되는 정보)
+
+응답 형식 (JSON):
+{
+  "questions": [
+    {
+      "question": "문제 내용",
+      "answer": "${type === 'short-answer' ? '정답 (한 단어 또는 짧은 문장)' : 'O 또는 X'}",
+      "hint": "힌트 내용 (정답을 직접 말하지 않고 도움이 되는 정보)",
+      "type": "${type}"
+    }
+  ]
+}
+
+JSON 형식으로만 응답해주세요.`
+      }
 
       const response = await aiApi.chat(prompt)
       if (response.success && response.data) {
@@ -573,7 +626,7 @@ JSON 형식으로만 응답해주세요.`
             const parsed = JSON.parse(jsonMatch[0])
             questions = (parsed.questions || []).map((q: any) => ({
               ...q,
-              hint: q.hint || generateDefaultHint(q.question, q.answer, selectedPiece)
+              hint: q.hint || (pieceInfo ? generateDefaultHint(q.question, q.answer, pieceInfo) : '영상을 다시 한번 확인해보세요.')
             }))
           } else {
             // JSON이 아닌 경우 기본 문제 생성
@@ -626,75 +679,148 @@ JSON 형식으로만 응답해주세요.`
 
   // 기본 문제 생성 (AI 실패 시 사용)
   const generateDefaultQuestions = (type: 'short-answer' | 'ox'): Array<{ question: string; answer: string; hint?: string; type: 'short-answer' | 'ox' }> => {
-    if (!selectedPiece) return []
-
-    if (type === 'short-answer') {
-      return [
-        {
-          question: `${selectedPiece.composer}의 "${selectedPiece.title}"의 작곡가는 누구인가요?`,
-          answer: selectedPiece.composer,
-          hint: `이 작곡가는 ${selectedPiece.period} 시대의 유명한 작곡가입니다.`,
-          type: 'short-answer'
-        },
-        {
-          question: `이 곡의 시대는 무엇인가요?`,
-          answer: selectedPiece.period,
-          hint: `이 곡은 ${selectedPiece.period} 시대에 작곡되었습니다.`,
-          type: 'short-answer'
-        },
-        {
-          question: `이 곡의 조성은 무엇인가요?`,
-          answer: selectedPiece.keySignature.replace('장조', '').replace('단조', ''),
-          hint: `곡의 조성은 ${selectedPiece.keySignature}입니다.`,
-          type: 'short-answer'
-        },
-        {
-          question: `이 곡의 박자는 무엇인가요?`,
-          answer: selectedPiece.timeSignature,
-          hint: `곡의 박자는 ${selectedPiece.timeSignature}입니다.`,
-          type: 'short-answer'
-        },
-        {
-          question: `이 곡의 난이도는 무엇인가요?`,
-          answer: selectedPiece.difficulty,
-          hint: `이 곡의 난이도는 ${selectedPiece.difficulty}입니다.`,
-          type: 'short-answer'
-        }
-      ]
-    } else {
-      return [
-        {
-          question: `${selectedPiece.composer}는 고전주의 시대의 작곡가입니다.`,
-          answer: selectedPiece.period === '고전주의' ? 'O' : 'X',
-          hint: `${selectedPiece.composer}는 ${selectedPiece.period} 시대의 작곡가입니다.`,
-          type: 'ox'
-        },
-        {
-          question: `이 곡의 조성은 ${selectedPiece.keySignature}입니다.`,
-          answer: 'O',
-          hint: `곡의 조성 정보를 확인해보세요.`,
-          type: 'ox'
-        },
-        {
-          question: `이 곡은 ${selectedPiece.timeSignature}박자로 되어 있습니다.`,
-          answer: 'O',
-          hint: `곡의 박자 정보를 확인해보세요.`,
-          type: 'ox'
-        },
-        {
-          question: `이 곡은 매우 어려운 곡입니다.`,
-          answer: selectedPiece.difficulty === '고급' ? 'O' : 'X',
-          hint: `이 곡의 난이도는 ${selectedPiece.difficulty}입니다.`,
-          type: 'ox'
-        },
-        {
-          question: `${selectedPiece.composer}는 바로크 시대의 작곡가입니다.`,
-          answer: selectedPiece.period === '바로크' ? 'O' : 'X',
-          hint: `${selectedPiece.composer}는 ${selectedPiece.period} 시대의 작곡가입니다.`,
-          type: 'ox'
-        }
-      ]
+    if (selectedPiece) {
+      // 추천 곡 감상 모드
+      if (type === 'short-answer') {
+        return [
+          {
+            question: `${selectedPiece.composer}의 "${selectedPiece.title}"의 작곡가는 누구인가요?`,
+            answer: selectedPiece.composer,
+            hint: `이 작곡가는 ${selectedPiece.period} 시대의 유명한 작곡가입니다.`,
+            type: 'short-answer'
+          },
+          {
+            question: `이 곡의 시대는 무엇인가요?`,
+            answer: selectedPiece.period,
+            hint: `이 곡은 ${selectedPiece.period} 시대에 작곡되었습니다.`,
+            type: 'short-answer'
+          },
+          {
+            question: `이 곡의 조성은 무엇인가요?`,
+            answer: selectedPiece.keySignature.replace('장조', '').replace('단조', ''),
+            hint: `곡의 조성은 ${selectedPiece.keySignature}입니다.`,
+            type: 'short-answer'
+          },
+          {
+            question: `이 곡의 박자는 무엇인가요?`,
+            answer: selectedPiece.timeSignature,
+            hint: `곡의 박자는 ${selectedPiece.timeSignature}입니다.`,
+            type: 'short-answer'
+          },
+          {
+            question: `이 곡의 난이도는 무엇인가요?`,
+            answer: selectedPiece.difficulty,
+            hint: `이 곡의 난이도는 ${selectedPiece.difficulty}입니다.`,
+            type: 'short-answer'
+          }
+        ]
+      } else {
+        return [
+          {
+            question: `${selectedPiece.composer}는 고전주의 시대의 작곡가입니다.`,
+            answer: selectedPiece.period === '고전주의' ? 'O' : 'X',
+            hint: `${selectedPiece.composer}는 ${selectedPiece.period} 시대의 작곡가입니다.`,
+            type: 'ox'
+          },
+          {
+            question: `이 곡의 조성은 ${selectedPiece.keySignature}입니다.`,
+            answer: 'O',
+            hint: `곡의 조성 정보를 확인해보세요.`,
+            type: 'ox'
+          },
+          {
+            question: `이 곡은 ${selectedPiece.timeSignature}박자로 되어 있습니다.`,
+            answer: 'O',
+            hint: `곡의 박자 정보를 확인해보세요.`,
+            type: 'ox'
+          },
+          {
+            question: `이 곡은 매우 어려운 곡입니다.`,
+            answer: selectedPiece.difficulty === '고급' ? 'O' : 'X',
+            hint: `이 곡의 난이도는 ${selectedPiece.difficulty}입니다.`,
+            type: 'ox'
+          },
+          {
+            question: `${selectedPiece.composer}는 바로크 시대의 작곡가입니다.`,
+            answer: selectedPiece.period === '바로크' ? 'O' : 'X',
+            hint: `${selectedPiece.composer}는 ${selectedPiece.period} 시대의 작곡가입니다.`,
+            type: 'ox'
+          }
+        ]
+      }
+    } else if (selectedVideo) {
+      // 직접 곡 찾기 모드 - 영상 제목 기반 기본 문제
+      const videoTitle = selectedVideo.title
+      if (type === 'short-answer') {
+        return [
+          {
+            question: `이 영상의 제목은 무엇인가요?`,
+            answer: videoTitle,
+            hint: `영상 제목을 다시 한번 확인해보세요.`,
+            type: 'short-answer'
+          },
+          {
+            question: `이 영상의 채널 이름은 무엇인가요?`,
+            answer: selectedVideo.channel,
+            hint: `영상 정보를 확인해보세요.`,
+            type: 'short-answer'
+          },
+          {
+            question: `이 영상에서 들리는 음악의 특징을 한 단어로 표현하면?`,
+            answer: '음악',
+            hint: `영상을 다시 들어보고 음악의 특징을 생각해보세요.`,
+            type: 'short-answer'
+          },
+          {
+            question: `이 영상에서 사용된 악기는 무엇인가요?`,
+            answer: '피아노',
+            hint: `영상을 시청하면서 어떤 악기가 나오는지 확인해보세요.`,
+            type: 'short-answer'
+          },
+          {
+            question: `이 음악의 느낌을 한 단어로 표현하면?`,
+            answer: '아름다운',
+            hint: `음악을 듣고 어떤 느낌인지 생각해보세요.`,
+            type: 'short-answer'
+          }
+        ]
+      } else {
+        return [
+          {
+            question: `이 영상은 음악 교육 영상입니다.`,
+            answer: 'O',
+            hint: `영상의 내용을 확인해보세요.`,
+            type: 'ox'
+          },
+          {
+            question: `이 영상에서 피아노 소리가 들립니다.`,
+            answer: 'O',
+            hint: `영상을 들어보면서 어떤 악기 소리가 나는지 확인해보세요.`,
+            type: 'ox'
+          },
+          {
+            question: `이 음악은 빠른 템포입니다.`,
+            answer: 'X',
+            hint: `음악의 속도를 다시 들어보세요.`,
+            type: 'ox'
+          },
+          {
+            question: `이 영상은 클래식 음악에 관한 내용입니다.`,
+            answer: 'O',
+            hint: `영상의 내용을 확인해보세요.`,
+            type: 'ox'
+          },
+          {
+            question: `이 음악은 조용한 느낌입니다.`,
+            answer: 'O',
+            hint: `음악의 분위기를 다시 들어보세요.`,
+            type: 'ox'
+          }
+        ]
+      }
     }
+    
+    return []
   }
 
   // 답안 제출
@@ -826,6 +952,46 @@ JSON 형식으로만 응답해주세요.`
     setCustomYoutubeId('')
   }
 
+  // 작곡가의 다른 곡 제안 요청
+  const requestComposerSuggestions = async (query: string) => {
+    setIsLoadingSuggestion(true)
+    setAiSuggestion('')
+    
+    try {
+      const prompt = `다음 검색어에서 작곡가나 음악가 이름을 추출하고, 해당 작곡가(음악가)의 다른 유명한 곡들을 초등학생이 이해하기 쉽게 3-5개 추천해주세요.
+
+검색어: "${query}"
+
+요구사항:
+- 작곡가/음악가 이름을 먼저 언급
+- 각 곡의 제목과 간단한 특징 설명
+- 초등학생이 이해할 수 있는 쉬운 언어 사용
+- 한국어로 응답
+
+응답 형식:
+작곡가 이름: [작곡가 이름]
+
+추천 곡:
+1. [곡 제목] - [간단한 설명]
+2. [곡 제목] - [간단한 설명]
+...`
+
+      const response = await aiApi.chat(prompt)
+      if (response.success && response.data) {
+        const data = response.data as any
+        const suggestionText = data.response || data.message || JSON.stringify(data)
+        setAiSuggestion(suggestionText)
+      } else {
+        setAiSuggestion('죄송합니다. 추천 곡을 불러올 수 없습니다.')
+      }
+    } catch (error) {
+      console.error('작곡가 추천 실패:', error)
+      setAiSuggestion('죄송합니다. 추천 곡을 불러올 수 없습니다.')
+    } finally {
+      setIsLoadingSuggestion(false)
+    }
+  }
+
   // YouTube 검색
   const handleSearchYouTube = async () => {
     if (!searchQuery.trim()) {
@@ -836,27 +1002,48 @@ JSON 형식으로만 응답해주세요.`
     setIsSearching(true)
     setSearchResults([])
     setError(null)
+    setNoResultsMessage('')
+    setAiSuggestion('')
 
     try {
       const response = await youtubeApi.search(searchQuery, 10)
+      console.log('YouTube 검색 응답:', response)
+      
       if (response.success && response.data) {
         const data = response.data as any
         const videos: YouTubeVideo[] = (data.videos || []).map((v: any) => ({
-          videoId: v.videoId || v.id,
+          videoId: v.videoId || v.id || v.video_id,
           title: v.title,
-          channel: v.channel || v.channelTitle,
+          channel: v.channel || v.channelTitle || v.channel_title || '',
           thumbnail: v.thumbnail,
-          url: `https://www.youtube.com/watch?v=${v.videoId || v.id}`,
-          description: v.description,
-          viewCount: v.viewCount
+          url: `https://www.youtube.com/watch?v=${v.videoId || v.id || v.video_id}`,
+          description: v.description || '',
+          viewCount: v.viewCount || v.view_count
         }))
-        setSearchResults(videos)
+        
+        if (videos.length === 0) {
+          // 검색 결과가 없을 때
+          setNoResultsMessage(`"${searchQuery}"에 대한 검색 결과가 없습니다.`)
+          // AI를 통해 작곡가의 다른 곡 제안
+          await requestComposerSuggestions(searchQuery)
+        } else {
+          setSearchResults(videos)
+        }
       } else {
-        setError('검색 결과를 불러올 수 없습니다.')
+        // API 응답 실패
+        const errorMsg = response.error || '검색 결과를 불러올 수 없습니다.'
+        setError(errorMsg)
+        setNoResultsMessage(`"${searchQuery}"에 대한 검색 결과를 불러올 수 없습니다.`)
+        // AI를 통해 작곡가의 다른 곡 제안
+        await requestComposerSuggestions(searchQuery)
       }
     } catch (error) {
       console.error('YouTube 검색 실패:', error)
-      setError('검색 중 오류가 발생했습니다.')
+      const errorMsg = error instanceof Error ? error.message : '알 수 없는 오류가 발생했습니다.'
+      setError(errorMsg)
+      setNoResultsMessage(`"${searchQuery}"에 대한 검색 중 오류가 발생했습니다.`)
+      // AI를 통해 작곡가의 다른 곡 제안
+      await requestComposerSuggestions(searchQuery)
     } finally {
       setIsSearching(false)
     }
@@ -1422,6 +1609,33 @@ JSON 형식으로만 응답해주세요.`
             </div>
           )}
 
+          {noResultsMessage && (
+            <div className="no-results-section">
+              <div className="no-results-message">
+                <div className="no-results-icon">🔍</div>
+                <h3>{noResultsMessage}</h3>
+                <p>다른 검색어로 시도해보시거나, 아래 추천 곡을 확인해보세요!</p>
+              </div>
+              
+              {isLoadingSuggestion ? (
+                <div className="suggestion-loading">
+                  <span className="spinner"></span>
+                  <p>추천 곡을 찾는 중...</p>
+                </div>
+              ) : aiSuggestion && (
+                <div className="ai-suggestion-box">
+                  <div className="suggestion-header">
+                    <div className="suggestion-icon">💡</div>
+                    <h4>추천 곡</h4>
+                  </div>
+                  <div className="suggestion-content">
+                    <pre className="suggestion-text">{aiSuggestion}</pre>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
           {searchResults.length > 0 && (
             <div className="search-results">
               <h3>검색 결과</h3>
@@ -1501,6 +1715,12 @@ JSON 형식으로만 응답해주세요.`
                 >
                   🎵 화음
                 </button>
+                <button
+                  className={`tab ${activeSection === 'activity' ? 'active' : ''}`}
+                  onClick={() => setActiveSection('activity')}
+                >
+                  ✏️ 학생 활동
+                </button>
               </div>
 
               <div className="tab-content">
@@ -1565,6 +1785,235 @@ JSON 형식으로만 응답해주세요.`
                     ) : (
                       <div className="empty-state">
                         <p>화음 정보를 불러올 수 없습니다.</p>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {activeSection === 'activity' && (
+                  <div className="activity-section">
+                    <h4>🎯 음악 퀴즈</h4>
+                    
+                    {!selectedVideo ? (
+                      <div className="quiz-mode-selection">
+                        <p className="quiz-intro">
+                          먼저 위에서 영상을 선택해주세요!
+                        </p>
+                        <p className="quiz-hint">
+                          영상을 선택하면 해당 영상에 대한 퀴즈를 풀 수 있습니다.
+                        </p>
+                      </div>
+                    ) : quizMode === 'none' ? (
+                      <div className="quiz-mode-selection">
+                        <p className="quiz-intro">
+                          "{selectedVideo.title}"에 대한 퀴즈를 풀어보세요!
+                        </p>
+                        <div className="quiz-mode-buttons">
+                          <button
+                            className="quiz-mode-button"
+                            onClick={() => generateQuiz('short-answer')}
+                            disabled={isLoadingQuiz || !selectedVideo}
+                          >
+                            📝 단답형 퀴즈
+                            <span className="quiz-mode-desc">5문제</span>
+                          </button>
+                          <button
+                            className="quiz-mode-button"
+                            onClick={() => generateQuiz('ox')}
+                            disabled={isLoadingQuiz || !selectedVideo}
+                          >
+                            ✅ OX형 퀴즈
+                            <span className="quiz-mode-desc">5문제</span>
+                          </button>
+                        </div>
+                        {isLoadingQuiz && (
+                          <div className="loading-state">
+                            <span className="spinner"></span>
+                            <p>퀴즈 문제를 생성하는 중...</p>
+                          </div>
+                        )}
+                      </div>
+                    ) : isQuizComplete ? (
+                      <div className="quiz-result">
+                        <div className="quiz-score-display">
+                          <h3>퀴즈 완료! 🎉</h3>
+                          <div className="score-circle">
+                            <div className="score-number">{quizScore.correct}</div>
+                            <div className="score-total">/ {quizScore.total}</div>
+                          </div>
+                          <div className="score-percentage">
+                            {Math.round((quizScore.correct / quizScore.total) * 100)}점
+                          </div>
+                        </div>
+                        
+                        <div className="quiz-review">
+                          <h4>문제 리뷰</h4>
+                          {quizQuestions.map((q, index) => (
+                            <div key={index} className={`quiz-review-item ${q.isCorrect ? 'correct' : 'incorrect'}`}>
+                              <div className="review-question">
+                                <span className="question-number">Q{index + 1}.</span>
+                                {q.question}
+                              </div>
+                              <div className="review-answer">
+                                <div className="answer-section">
+                                  <span className="answer-label">정답:</span>
+                                  <span className="correct-answer">{q.answer}</span>
+                                </div>
+                                {q.userAnswer && (
+                                  <div className="answer-section">
+                                    <span className="answer-label">내 답:</span>
+                                    <span className={`user-answer ${q.isCorrect ? 'correct' : 'incorrect'}`}>
+                                      {q.userAnswer}
+                                    </span>
+                                  </div>
+                                )}
+                                <span className={`result-badge ${q.isCorrect ? 'correct' : 'incorrect'}`}>
+                                  {q.isCorrect ? '✓ 정답!' : '✗ 오답'}
+                                </span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                        
+                        <div className="quiz-actions">
+                          <button className="restart-button" onClick={handleRestartQuiz}>
+                            🔄 다시 풀기
+                          </button>
+                          <button className="new-quiz-button" onClick={() => {
+                            setQuizMode('none')
+                            setQuizQuestions([])
+                            setCurrentQuestionIndex(0)
+                            setUserAnswer('')
+                            setQuizScore({ correct: 0, total: 0 })
+                            setIsQuizComplete(false)
+                          }}>
+                            📝 다른 퀴즈 풀기
+                          </button>
+                        </div>
+                      </div>
+                    ) : quizQuestions.length > 0 ? (
+                      <div className="quiz-container">
+                        <div className="quiz-progress">
+                          <div className="progress-bar">
+                            <div 
+                              className="progress-fill" 
+                              style={{ width: `${Math.min(((currentQuestionIndex + 1) / quizQuestions.length) * 100, 100)}%` }}
+                            />
+                          </div>
+                          <span className="progress-text">
+                            {Math.min(currentQuestionIndex + 1, quizQuestions.length)} / {quizQuestions.length}
+                          </span>
+                        </div>
+                        
+                        <div className="quiz-question-card">
+                          <div className="question-header">
+                            <span className="question-type-badge">
+                              {quizMode === 'ox' ? 'OX형' : '단답형'}
+                            </span>
+                            <span className="question-number-large">Q{Math.min(currentQuestionIndex + 1, quizQuestions.length)}</span>
+                          </div>
+                          <div className="question-text">
+                            {quizQuestions[currentQuestionIndex]?.question || '문제를 불러오는 중...'}
+                          </div>
+                          
+                          {/* 힌트 표시 */}
+                          {showHint && quizQuestions[currentQuestionIndex]?.hint && (
+                            <div className="quiz-hint-box">
+                              <div className="hint-icon">💡</div>
+                              <div className="hint-text">{quizQuestions[currentQuestionIndex].hint}</div>
+                            </div>
+                          )}
+                          
+                          {/* 정답 표시 */}
+                          {showAnswer && (
+                            <div className="quiz-answer-box">
+                              <div className="answer-icon">✓</div>
+                              <div className="answer-text">
+                                <span className="answer-label-text">정답: </span>
+                                <span className="answer-value">{quizQuestions[currentQuestionIndex]?.answer}</span>
+                              </div>
+                            </div>
+                          )}
+                          
+                          {/* 힌트/정답 버튼 */}
+                          <div className="quiz-help-buttons">
+                            {quizQuestions[currentQuestionIndex]?.hint && (
+                              <button
+                                className="hint-button"
+                                onClick={() => setShowHint(!showHint)}
+                              >
+                                {showHint ? '💡 힌트 숨기기' : '💡 힌트 보기'}
+                              </button>
+                            )}
+                            <button
+                              className="answer-button"
+                              onClick={() => {
+                                const newShowAnswer = !showAnswer
+                                setShowAnswer(newShowAnswer)
+                                // 정답 확인 시 자동으로 답안 입력란에 정답 채우기
+                                if (newShowAnswer && quizQuestions[currentQuestionIndex]) {
+                                  const currentAnswer = quizQuestions[currentQuestionIndex].answer
+                                  if (quizMode === 'ox') {
+                                    setUserAnswer(currentAnswer.toUpperCase())
+                                  } else {
+                                    setUserAnswer(currentAnswer)
+                                  }
+                                }
+                              }}
+                            >
+                              {showAnswer ? '✓ 정답 숨기기' : '✓ 정답 확인'}
+                            </button>
+                          </div>
+                          
+                          {quizMode === 'ox' ? (
+                            <div className="ox-answers">
+                              <button
+                                className={`ox-button ${userAnswer === 'O' ? 'selected' : ''}`}
+                                onClick={() => setUserAnswer('O')}
+                              >
+                                O (맞음)
+                              </button>
+                              <button
+                                className={`ox-button ${userAnswer === 'X' ? 'selected' : ''}`}
+                                onClick={() => setUserAnswer('X')}
+                              >
+                                X (틀림)
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="short-answer-input">
+                              <input
+                                type="text"
+                                className="answer-input"
+                                placeholder="답을 입력하세요"
+                                value={userAnswer}
+                                onChange={(e) => setUserAnswer(e.target.value)}
+                                onKeyPress={(e) => {
+                                  if (e.key === 'Enter') {
+                                    handleSubmitAnswer()
+                                  }
+                                }}
+                              />
+                            </div>
+                          )}
+                          
+                          <button
+                            className="submit-answer-button"
+                            onClick={handleSubmitAnswer}
+                            disabled={!userAnswer.trim()}
+                          >
+                            {currentQuestionIndex < quizQuestions.length - 1 ? '다음 문제 →' : '제출하기 ✓'}
+                          </button>
+                        </div>
+                        
+                        <div className="quiz-score-mini">
+                          현재 점수: {quizScore.correct} / {currentQuestionIndex} {currentQuestionIndex > 0 && quizScore.correct > 0 ? `(${Math.round((quizScore.correct / currentQuestionIndex) * 100)}%)` : ''}
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="loading-state">
+                        <span className="spinner"></span>
+                        <p>퀴즈 문제를 생성하는 중...</p>
                       </div>
                     )}
                   </div>

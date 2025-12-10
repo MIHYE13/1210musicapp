@@ -2,9 +2,19 @@ import { useState } from 'react'
 import './ChordAnalysis.css'
 import PianoKeyboard from './PianoKeyboard'
 
-// 음표 이름 매핑
+// 음표 이름 매핑 (반음 단위로 12개)
 const NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
-// const NOTE_NAMES_FLAT = ['C', 'Db', 'D', 'Eb', 'E', 'F', 'Gb', 'G', 'Ab', 'A', 'Bb', 'B'] // 사용하지 않음
+
+// 플랫(b)을 샤프(#)로 변환하는 매핑
+const FLAT_TO_SHARP: Record<string, string> = {
+  'Cb': 'B',
+  'Db': 'C#',
+  'Eb': 'D#',
+  'Fb': 'E',
+  'Gb': 'F#',
+  'Ab': 'G#',
+  'Bb': 'A#'
+}
 
 // 화음 타입 및 표시 이름 (초등학생 수준: 장3화음, 단3화음만)
 const CHORD_OPTIONS: ChordOption[] = [
@@ -41,10 +51,20 @@ const ChordAnalysis = () => {
   const [chordScore, setChordScore] = useState<Array<{ measure: number; chord: string; notes: string[] }>>([]) // 화음 악보
   const [octave, setOctave] = useState<number>(4)
 
-  // 음표에서 루트 음 추출
+  // 플랫(b)을 샤프(#)로 변환
+  const convertFlatToSharp = (noteName: string): string => {
+    if (noteName.includes('b')) {
+      return FLAT_TO_SHARP[noteName] || noteName.replace('b', '#')
+    }
+    return noteName
+  }
+
+  // 음표에서 루트 음 추출 (플랫을 샤프로 변환)
   const extractRootNote = (note: string): string => {
     const match = note.match(/([A-G]#?b?)/)
-    return match ? match[1] : ''
+    if (!match) return ''
+    const rootName = match[1]
+    return convertFlatToSharp(rootName)
   }
 
   // 루트 음과 화음 타입으로 구성음 생성
@@ -52,18 +72,31 @@ const ChordAnalysis = () => {
     const rootMatch = root.match(/([A-G]#?b?)/)
     if (!rootMatch) return []
     
-    const rootName = rootMatch[1]
-    const rootIndex = NOTE_NAMES.findIndex(n => n === rootName || n === rootName.replace('b', '#'))
-    if (rootIndex === -1) return []
+    let rootName = rootMatch[1]
+    // 플랫을 샤프로 변환
+    rootName = convertFlatToSharp(rootName)
+    
+    // NOTE_NAMES 배열에서 루트 음의 인덱스 찾기
+    const rootIndex = NOTE_NAMES.findIndex(n => n === rootName)
+    if (rootIndex === -1) {
+      console.warn(`루트 음을 찾을 수 없습니다: ${rootName}`)
+      return []
+    }
     
     const chordOption = CHORD_OPTIONS.find(opt => opt.type === chordType)
-    if (!chordOption) return []
+    if (!chordOption) {
+      console.warn(`화음 타입을 찾을 수 없습니다: ${chordType}`)
+      return []
+    }
     
     return chordOption.intervals.map(interval => {
-      const noteIndex = (rootIndex + interval) % 12
+      // 반음 단위로 interval을 더함
+      const totalSemitones = rootIndex + interval
+      // 12로 나눈 나머지로 음표 인덱스 계산 (0-11 범위)
+      const noteIndex = totalSemitones % 12
       const noteName = NOTE_NAMES[noteIndex]
-      // 옥타브 계산 (interval이 12를 넘으면 다음 옥타브)
-      const noteOctave = baseOctave + Math.floor((rootIndex + interval) / 12)
+      // 옥타브 계산: 12 반음이 넘어가면 다음 옥타브
+      const noteOctave = baseOctave + Math.floor(totalSemitones / 12)
       return `${noteName}${noteOctave}`
     })
   }
