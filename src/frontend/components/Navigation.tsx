@@ -2,12 +2,12 @@ import { useState } from 'react'
 import { 
   HiHome, 
   HiMicrophone, 
-  HiMusicalNote, 
   HiSparkles,
   HiSearch,
   HiPuzzle,
   HiAcademicCap
 } from 'react-icons/hi'
+import { HiMusicNote } from 'react-icons/hi2'
 import { HiBars3, HiXMark } from 'react-icons/hi2'
 import './Navigation.css'
 
@@ -31,7 +31,7 @@ const Navigation = ({ currentPage, setCurrentPage }: NavigationProps) => {
   const menuItems = [
     { id: 'home' as Page, label: '홈', icon: HiHome },
     { id: 'audio-to-score' as Page, label: '오디오→악보', icon: HiMicrophone },
-    { id: 'score-processing' as Page, label: '악보 처리', icon: HiMusicalNote },
+    { id: 'score-processing' as Page, label: '악보 처리', icon: HiMusicNote },
     { id: 'ai-assistant' as Page, label: 'AI 도우미', icon: HiSparkles },
     { id: 'perplexity-youtube' as Page, label: '정보 & 영상', icon: HiSearch },
     { id: 'chord-analysis' as Page, label: '화음 분석', icon: HiPuzzle },
