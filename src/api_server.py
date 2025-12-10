@@ -271,6 +271,7 @@ async def root():
             "health": "/api/health",
             "keys": "/api/keys/status",
             "audio": "/api/audio/process",
+            "audio_musicxml": "/api/audio/upload-to-musicxml",
             "score": "/api/score/process",
             "ai": "/api/ai/chat",
             "perplexity": "/api/perplexity/search",
@@ -471,6 +472,150 @@ async def process_audio(file: UploadFile = File(...)):
         print(f"[ERROR] {error_detail}")
         print(traceback.format_exc())
         raise HTTPException(status_code=500, detail=error_detail)
+
+@app.post("/api/audio/upload-to-musicxml")
+async def upload_audio_to_musicxml(file: UploadFile = File(...)):
+    """
+    오디오 파일을 업로드하여 MusicXML로 변환 (개선된 파이프라인)
+    MP3 -> WAV -> MIDI -> MusicXML
+    """
+    temp_files = []  # 정리할 임시 파일 목록
+    
+    try:
+        # 1. 파일 확장자 확인
+        file_ext = file.filename.split('.')[-1].lower() if file.filename else 'mp3'
+        if file_ext not in ['mp3', 'wav', 'mpeg', 'wma', 'flac', 'ogg']:
+            raise HTTPException(
+                status_code=400,
+                detail=f"지원하지 않는 파일 형식입니다: {file_ext}. MP3, WAV 파일을 업로드해주세요."
+            )
+        
+        # 2. 임시 파일로 저장
+        with tempfile.NamedTemporaryFile(suffix=f".{file_ext}", delete=False) as tmp:
+            content = await file.read()
+            tmp.write(content)
+            audio_path = tmp.name
+            temp_files.append(audio_path)
+        
+        # 3. MP3 -> WAV 변환 (pydub 사용, MP3인 경우만)
+        wav_path = audio_path
+        if file_ext in ['mp3', 'mpeg', 'wma', 'flac', 'ogg']:
+            try:
+                from pydub import AudioSegment
+                audio = AudioSegment.from_file(audio_path, format=file_ext)
+                wav_path = audio_path.replace(f".{file_ext}", ".wav")
+                audio.export(wav_path, format="wav")
+                temp_files.append(wav_path)
+                print(f"[INFO] WAV 변환 완료: {wav_path}")
+            except ImportError:
+                raise HTTPException(
+                    status_code=503,
+                    detail="pydub가 설치되지 않았습니다. pip install pydub를 실행해주세요."
+                )
+            except Exception as e:
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"오디오 파일 변환 실패: {str(e)}"
+                )
+        
+        # 4. WAV -> MIDI 변환 (basic-pitch)
+        midi_path = wav_path.replace(".wav", ".mid")
+        try:
+            from basic_pitch.inference import predict as basic_pitch_predict
+            # basic-pitch로 MIDI 생성
+            # predict 함수는 (model_output, midi_data, note_events) 튜플을 반환
+            model_output, midi_data, note_events = basic_pitch_predict(wav_path)
+            
+            # MIDI 데이터를 파일로 저장
+            if midi_data is not None:
+                midi_data.write(midi_path)
+                temp_files.append(midi_path)
+                print(f"[INFO] MIDI 변환 완료: {midi_path}")
+            else:
+                raise HTTPException(
+                    status_code=500,
+                    detail="MIDI 데이터를 생성할 수 없습니다. 오디오 파일에 명확한 멜로디가 있는지 확인해주세요."
+                )
+        except ImportError:
+            raise HTTPException(
+                status_code=503,
+                detail="basic-pitch가 설치되지 않았습니다. pip install basic-pitch를 실행해주세요."
+            )
+        except ValueError as e:
+            # basic-pitch가 설치되었지만 모델이 없는 경우
+            raise HTTPException(
+                status_code=503,
+                detail=f"basic-pitch 모델을 로드할 수 없습니다: {str(e)}"
+            )
+        except Exception as e:
+            import traceback
+            error_detail = str(e)
+            print(f"[ERROR] MIDI 변환 실패: {error_detail}")
+            print(traceback.format_exc())
+            raise HTTPException(
+                status_code=500,
+                detail=f"MIDI 변환 실패: {error_detail}. 오디오 파일에 명확한 멜로디가 있는지 확인해주세요."
+            )
+        
+        # 5. MIDI -> MusicXML 변환 (music21)
+        if not HAS_MUSIC21:
+            raise HTTPException(
+                status_code=503,
+                detail="music21이 설치되지 않았습니다. pip install music21을 실행해주세요."
+            )
+        
+        musicxml_path = midi_path.replace(".mid", ".musicxml")
+        try:
+            from music21 import converter
+            score = converter.parse(midi_path)
+            score.write("musicxml", fp=musicxml_path)
+            temp_files.append(musicxml_path)
+            print(f"[INFO] MusicXML 변환 완료: {musicxml_path}")
+        except Exception as e:
+            raise HTTPException(
+                status_code=500,
+                detail=f"MusicXML 변환 실패: {str(e)}"
+            )
+        
+        # 6. MusicXML 파일을 클라이언트에게 반환
+        # 임시 파일은 다운로드 후 정리하지 않고, 나중에 정리 스케줄러에서 처리
+        return FileResponse(
+            musicxml_path,
+            media_type="application/xml",
+            filename=f"{Path(file.filename).stem}.musicxml",
+            headers={
+                "X-MIDI-Path": midi_path,
+                "X-WAV-Path": wav_path
+            }
+        )
+        
+    except HTTPException:
+        # HTTPException은 그대로 전달하고 임시 파일 정리
+        for temp_file in temp_files:
+            try:
+                if os.path.exists(temp_file):
+                    os.unlink(temp_file)
+            except Exception:
+                pass
+        raise
+    except Exception as e:
+        # 예상치 못한 오류 발생 시 임시 파일 정리
+        for temp_file in temp_files:
+            try:
+                if os.path.exists(temp_file):
+                    os.unlink(temp_file)
+            except Exception:
+                pass
+        
+        import traceback
+        error_detail = str(e)
+        print(f"[ERROR] 오디오 변환 중 오류 발생: {error_detail}")
+        print(traceback.format_exc())
+        
+        raise HTTPException(
+            status_code=500,
+            detail=f"오디오 처리 중 오류가 발생했습니다: {error_detail}"
+        )
 
 # ==================== Score Processing ====================
 
